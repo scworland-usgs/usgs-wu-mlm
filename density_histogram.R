@@ -31,9 +31,8 @@ grid.arrange(htop, blank, scatter, hright, ncol=2, nrow=2, widths=c(4, 1), heigh
 
 }
 
-df = data.frame(cbind(wn1985 = subset(wudata, year==1985)$wn,
-                      wn1990 = subset(wudata, year==1990)$wn))
 
-density.hist(df, x = "wn1985", y = "wn1990")
+# example
+# density.hist(df, x = "xdata", y = "ydata")
 
 
