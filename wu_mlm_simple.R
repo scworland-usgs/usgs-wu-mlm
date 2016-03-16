@@ -20,7 +20,7 @@ wudata$wn[which(wudata$wn>1000)] = 1000 # temporary
 wudata$wn[which(wudata$wn==0)] = 1 # temporary
 
 # prepare model data
-model.data <- wudata[,c(1,5,10:n,7)]
+model.data <- wudata[,c(1,5,10:ncol(wudata),7)]
 model.data$CDC_urban <- as.integer(model.data$CDC_urban)
 n <- ncol(model.data)
 model.data[,5:n] <- scale(model.data[,5:n]) # scale
