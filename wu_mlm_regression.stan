@@ -1,27 +1,24 @@
 data {
-  int<lower=1> N;
-  int<lower=1> K;
-  int<lower=1> J;
-  matrix[N, K] X;
-  vector[N] y;
-  int<lower=1,upper=N> year[N];
+  int<lower=1> N; // number of observations
+  int<lower=1> K; // number of predictors including column of ones
+  int<lower=1> J; // number of groups (years)
+  matrix[N, K] X; // design matrix, X[,1] is column of ones
+  vector[N] y; // response variable
+  int<lower=1,upper=N> year[N]; // I think have to include this for the groups
 }
 
 parameters {
-  real<lower=0> sigma;
-  real<lower=0> sigma_a;
-  real<lower=0> sigma_b;
-  vector[J] b;
-  vector[J] a;
-  real mu_a;
-  real mu_b;
+  real<lower=0> sigma; // global sigma
+  real<lower=0> sigma_b; // sigma for slope parameters
+  vector[J] b; // vector of estimated parameters. Should this be "matrix[J,K] b"?
+  real mu_b; // mean for betas
 }
 
 transformed parameters {
   vector[N] y_hat;
 
   for (i in 1:N)
-    y_hat[i] <- a[year[i]] + b[year[i]] * X[i];
+    y_hat[i] <- b[year[i]] * X[i]; 
 
 }
 
