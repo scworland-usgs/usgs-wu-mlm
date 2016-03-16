@@ -13,6 +13,7 @@ library(ggmap)
 library(RColorBrewer)
 library(ggmcmc)
 library(stringr)
+library(reshape2)
 
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
@@ -27,6 +28,7 @@ wudata$wn[which(wudata$wn==0)] = 1 # temporary
 # prepare model data
 model.data <- wudata[,c(1,5,10:ncol(wudata),7)]
 model.data$CDC_urban <- as.integer(model.data$CDC_urban)
+model.data$year <- as.integer(factor(wudata$year))
 
 n <- ncol(model.data)
 model.data[,5:n] <- scale(model.data[,5:n]) # scale
@@ -158,11 +160,25 @@ stan_data <- list(y = model.data$wn,
 stan_model <- stan_model('wu_mlm_regression.stan', model_name = "mlm wu regression")
 
 stan_params <- c('gamma', 'beta', 'sigma', 'tau', 'z')
-fit <- sampling(stan_model, stan_data, pars = stan_params,iter = 2000, chains = 4)
+fit <- sampling(stan_model, stan_data, pars = stan_params,iter = 2000, chains = 1)
 
+g <- ggs(fit,family="beta")
+g$num <- as.numeric(gsub("[^\\d]+", "", g$Parameter, perl=TRUE)) # extract beta #'s
+g$year_index <- as.numeric(substr(as.character(g$num),1,1))
+g$coef_index <- as.numeric(substring(as.character(g$num), 2))
+g$year <- unique(wudata$year)[g$year_index]
+g$Parameter <- colnames(X)[g$coef_index]
 
+g2 <- dcast(aggregate(value ~ Parameter + year, data=g, FUN="mean"), Parameter~year)
 
+ggplot(g[,c(3,4,8)]) + 
+  geom_boxplot(aes(x=Parameter,y=value,fill=factor(year)), outlier.shape=NA) + geom_hline(yintercept = 0) +
+  coord_flip() + theme_bw(base_size=12) + labs(x=NULL, fill="year")
 
+gmelt <- melt(g[,c(3,4,8)],id.vars=c("Parameter","year"))
+
+ggs_caterpillar(g[,c(3,4,8)])  + geom_vline(xintercept = 0) + 
+  facet_wrap(~ year) + theme_bw(base_size=12)
 
 
 

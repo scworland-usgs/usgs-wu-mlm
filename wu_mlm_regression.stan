@@ -4,7 +4,7 @@ data {
   int<lower=1> J; // number of groups (years)
   matrix[N,K] X; // design matrix, X[,1] is column of ones
   vector[N] y; // response variable
-  int<lower=1985,upper=2010> year[N]; // groups
+  int<lower=1,upper=J> year[N]; // groups
   real<lower = 0> nu; // LKJ parameter
 }
 
