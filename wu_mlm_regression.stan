@@ -12,6 +12,7 @@ parameters {
   real<lower=0> sigma_a;
   real<lower=0> sigma_b;
   vector[J] b;
+  vector[J] a;
   real mu_a;
   real mu_b;
 }
