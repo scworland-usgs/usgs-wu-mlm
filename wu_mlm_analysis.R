@@ -23,13 +23,15 @@ setwd("C:/Users/scworlan/Documents/Water Conservation/R_conservation/USGSwaterUs
 wudata <- read.csv('cnty_wu_data_complete_march2016.csv')
 wudata$wn[which(wudata$wn>1000)] = 1000 # temporary
 wudata$wn[which(wudata$wn==0)] = 1 # temporary
-n <- ncol(wudata)
 
 # prepare model data
-model.data <- wudata
-model.data[,12:(n-1)] <- scale(model.data[,12:(n-1)]) # scale
+model.data <- wudata[,c(1,5,10:ncol(wudata),7)]
+model.data$CDC_urban <- as.integer(model.data$CDC_urban)
 
-cormat <- cor(model.data[,11:n])
+n <- ncol(model.data)
+model.data[,5:n] <- scale(model.data[,5:n]) # scale
+
+cormat <- cor(model.data[,4:n])
 corrplot::corrplot(cormat,method="ellipse", diag=F, type = "lower")
 
 # multivariate linear models ----
@@ -141,12 +143,22 @@ ggs_caterpillar(list(y1985=fit_ggs1985, y1990=fit_ggs1990)) + geom_vline(xinterc
   theme_bw(base_size=12) + xlab('HDI')
 
 
+# Years as levels ----
+
+X <- model.matrix( ~., model.data[,5:n])
+
+stan_data <- list(y = model.data$wn,
+                  year = model.data$year,
+                  X = X,
+                  K = ncol(X),
+                  N = nrow(model.data),
+                  J = length(unique(model.data$year)))
+
+stan_model <- stan_model('wu_mlm_regression.stan', model_name = "mlm wu regression")
 
 
-
-
-
-
+stan.fit <- sampling(stan_model, stan_data, iter = 2000, chains = 4)
+fit_ggs1985 <- ggs(stan.fit1985, family="beta")
 
 
 
@@ -167,7 +179,7 @@ fit_ggs$num <- as.numeric(gsub("[^\\d]+", "", fit_ggs$Parameter, perl=TRUE)) # e
 fit_ggs$Parameter <- colnames(X)[fit_ggs$num] # index parameters
 fit_ggs2 <- merge(fit_ggs, lm.coef, by ="Parameter")
 
-ggs_caterpillar(fit_ggs2) + geom_vline(xintercept = 0) + theme_bw(base_size=12) + xlab('Parameter Values') +
+ggs_caterpillar(fit_ggs1985) + geom_vline(xintercept = 0) + theme_bw(base_size=12) + xlab('Parameter Values') + xlim(-50,50)
   ggtitle("Parameter Estimates for 2005 wn") + 
   geom_point(aes(x=value.lm, y=Parameter), color="dodgerblue", size=3, alpha=0.5) +
   geom_segment(aes(x = value.lm-error.lm, y = Parameter, xend = value.lm+error.lm, yend = Parameter), 
