@@ -152,14 +152,13 @@ stan_data <- list(y = model.data$wn,
                   X = X,
                   K = ncol(X),
                   N = nrow(model.data),
-                  J = length(unique(model.data$year)))
+                  J = length(unique(model.data$year)),
+                  nu = 2)
 
 stan_model <- stan_model('wu_mlm_regression.stan', model_name = "mlm wu regression")
 
-
-stan.fit <- sampling(stan_model, stan_data, iter = 2000, chains = 4)
-fit_ggs1985 <- ggs(stan.fit1985, family="beta")
-
+stan_params <- c('gamma', 'beta', 'sigma', 'tau', 'z')
+fit <- sampling(stan_model, stan_data, pars = stan_params,iter = 2000, chains = 4)
 
 
 

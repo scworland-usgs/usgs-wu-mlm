@@ -1,37 +1,53 @@
 data {
-  int<lower=1> N; // number of observations
+  int<lower=1> N; // number of observations (counties)
   int<lower=1> K; // number of predictors including column of ones
   int<lower=1> J; // number of groups (years)
-  matrix[N, K] X; // design matrix, X[,1] is column of ones
+  matrix[N,K] X; // design matrix, X[,1] is column of ones
   vector[N] y; // response variable
-  int<lower=1,upper=N> year[N]; // I think have to include this for the groups
+  int<lower=1985,upper=2010> year[N]; // groups
+  real<lower = 0> nu; // LKJ parameter
 }
 
 parameters {
-  real<lower=0> sigma; // global sigma
-  real<lower=0> sigma_b; // sigma for slope parameters
-  vector[J] b; // vector of estimated parameters. Should this be "matrix[J,K] b"?
-  real mu_b; // mean for betas
+  matrix[K,J] z;
+  cholesky_factor_corr[K] L_Omega;
+  vector<lower=1E-6>[K] tau;  // prior scale
+  real<lower=1E-6> sigma; // prediction error scale (for VWCI)
+  row_vector[K-1] b0;
+  matrix[J-1,K] g0;
 }
 
 transformed parameters {
-  vector[N] y_hat;
+  matrix[J,K] gamma;
+  matrix[J,K] beta;
 
-  for (i in 1:N)
-    y_hat[i] <- b[year[i]] * X[i]; 
-
+  if (J > 1) {
+  gamma[2:J] <- g0;
+  for (k in 1:K)
+    gamma[1,k] <-  -sum(g0[,k]);
+  } else {
+    gamma[1] <- rep_row_vector(0.0, K);
+  }
+  
+  beta <- rep_matrix(append_col(rep_row_vector(0.0,1), b0), J) + gamma ;
+  beta <- beta + (diag_pre_multiply(tau, L_Omega) * z)';
+  #beta <- beta + (diag_matrix(tau) * z)';
 }
 
 model {
-  mu_a ~ normal(0, 100);
-  mu_b ~ normal(0, 100);
-
-  a ~ normal(mu_a, sigma_a);
-  b ~ normal(mu_b, sigma_b);
-  y ~ normal(y_hat, sigma);
+  vector[N] x_beta_year;
+  
+  tau ~ cauchy(0,1);
+  sigma ~ cauchy(0,1);
+  to_vector(z) ~ normal(0,1);
+  b0 ~ normal(0,100);
+  to_vector(g0) ~ normal(0,1);
+  L_Omega ~ lkj_corr_cholesky(nu);
+  
+  for (n in 1:N) {
+    x_beta_year[n] <- X[n] * beta[year[n]]';
+  }
+  y ~ normal(x_beta_year, sigma);
 }
-
-}
-
 
 
