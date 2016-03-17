@@ -15,9 +15,6 @@ library(ggmcmc)
 library(stringr)
 library(reshape2)
 
-rstan_options(auto_write = TRUE)
-options(mc.cores = parallel::detectCores())
-
 setwd("C:/Users/scworlan/Documents/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm")
 
 # load data ----
@@ -29,6 +26,7 @@ wudata$wn[which(wudata$wn==0)] = 1 # temporary
 model.data <- wudata[,c(1,5,10:ncol(wudata),7)]
 model.data$CDC_urban <- as.integer(model.data$CDC_urban)
 model.data$year <- as.integer(factor(wudata$year))
+model.data$climate_region <- as.integer(factor(model.data$climate_region))
 
 n <- ncol(model.data)
 model.data[,5:n] <- scale(model.data[,5:n]) # scale
@@ -36,7 +34,7 @@ model.data[,5:n] <- scale(model.data[,5:n]) # scale
 cormat <- cor(model.data[,4:n])
 corrplot::corrplot(cormat,method="ellipse", diag=F, type = "lower")
 
-# multivariate linear models ----
+# lm and lmer models ----
 
 model.data.1985 <- subset(model.data, year == 1985)
 X <- model.matrix( ~., model.data.1985[,12:n])
@@ -62,88 +60,10 @@ cfm <- melt(cf[,2:ncol(cf)])
 ggplot(cfm) + geom_point(aes(value, region), size = 2) + geom_line(aes(value, region), color="blue") +
   facet_wrap(~variable, scales = "free_x") 
 
-
 # Bayesian fit ----
-stan_model <- stan_model('wu_simple_reg.stan', model_name = "simple wu regression")
 
-## 1985
-model.data.1985 <- subset(model.data, year == 1985)
-X1985 <- model.matrix( ~., model.data.1985[,12:n])
-
-stan_data1985 <- list(y = model.data.1985$wn,
-                  X = X1985,
-                  K = ncol(X1985),
-                  N = nrow(model.data.1985))
-
-stan.fit1985 <- sampling(stan_model, stan_data1985, iter = 2000, chains = 4)
-fit_ggs1985 <- ggs(stan.fit1985, family="beta")
-fit_ggs1985$num <- as.numeric(gsub("[^\\d]+", "", fit_ggs1985$Parameter, perl=TRUE)) # extract beta #'s
-fit_ggs1985$Parameter <- colnames(X1985)[fit_ggs1985$num] # index parameters
-
-
-## 1990
-model.data.1990 <- subset(model.data, year == 1990)
-X1990 <- model.matrix( ~., model.data.1990[,12:n])
-
-stan_data1990 <- list(y = model.data.1990$wn,
-                      X = X1990,
-                      K = ncol(X1990),
-                      N = nrow(model.data.1990))
-
-stan.fit1990 <- sampling(stan_model, stan_data1990, iter = 2000, chains = 4)
-fit_ggs1990 <- ggs(stan.fit1990, family="beta")
-fit_ggs1990$num <- as.numeric(gsub("[^\\d]+", "", fit_ggs1990$Parameter, perl=TRUE)) # extract beta #'s
-fit_ggs1990$Parameter <- colnames(X1990)[fit_ggs1990$num] # index parameters
-
-## 1995
-model.data.1995 <- subset(model.data, year == 1995)
-X1995 <- model.matrix( ~., model.data.1995[,12:n])
-
-stan_data1995 <- list(y = model.data.1995$wn,
-                      X = X1995,
-                      K = ncol(X1995),
-                      N = nrow(model.data.1995))
-
-stan.fit1995 <- sampling(stan_model, stan_data1995, iter = 2000, chains = 4)
-
-## 2000
-model.data.2000 <- subset(model.data, year == 2000)
-X2000 <- model.matrix( ~., model.data.2000[,12:n])
-
-stan_data2000 <- list(y = model.data.2000$wn,
-                      X = X1995,
-                      K = ncol(X1995),
-                      N = nrow(model.data.2000))
-
-stan.fit2000 <- sampling(stan_model, stan_data2000, iter = 2000, chains = 4)
-
-## 2005
-model.data.2005 <- subset(model.data, year == 2005)
-X2005 <- model.matrix( ~., model.data.2005[,12:n])
-
-stan_data2005 <- list(y = model.data.2005$wn,
-                      X = X2005,
-                      K = ncol(X2005),
-                      N = nrow(model.data.2005))
-
-stan.fit2005 <- sampling(stan_model, stan_data2005, iter = 2000, chains = 4)
-
-## 2010
-model.data.2010 <- subset(model.data, year == 2010)
-X2010 <- model.matrix( ~., model.data.2010[,12:n])
-
-stan_data2010 <- list(y = model.data.2010$wn,
-                      X = X2010,
-                      K = ncol(X2010),
-                      N = nrow(model.data.2010))
-
-stan.fit2010 <- sampling(stan_model, stan_data2010, iter = 2000, chains = 4)
-
-
-
-ggs_caterpillar(list(y1985=fit_ggs1985, y1990=fit_ggs1990)) + geom_vline(xintercept = 0) + 
-  theme_bw(base_size=12) + xlab('HDI')
-
+rstan_options(auto_write = TRUE)
+options(mc.cores = parallel::detectCores())
 
 # Years as levels ----
 
@@ -172,13 +92,47 @@ g$Parameter <- colnames(X)[g$coef_index]
 g2 <- dcast(aggregate(value ~ Parameter + year, data=g, FUN="mean"), Parameter~year)
 
 ggplot(g[,c(3,4,8)]) + 
-  geom_boxplot(aes(x=Parameter,y=value,fill=factor(year)), outlier.shape=NA) + geom_hline(yintercept = 0) +
-  coord_flip() + theme_bw(base_size=12) + labs(x=NULL, fill="year")
+  geom_boxplot(aes(x=Parameter,y=value,fill=factor(year)), size=0.5, outlier.shape=NA) + 
+  geom_hline(yintercept = 0) + ggtitle("Posterior estimates for years 1985-2010") +
+  coord_flip() + theme_bw(base_size=15) + labs(x=NULL, fill="year")
 
-gmelt <- melt(g[,c(3,4,8)],id.vars=c("Parameter","year"))
 
-ggs_caterpillar(g[,c(3,4,8)])  + geom_vline(xintercept = 0) + 
-  facet_wrap(~ year) + theme_bw(base_size=12)
+# Regions as levels ----
+stan_data.regions <- list(y = model.data$wn,
+                          climate_region = model.data$climate_region,
+                          X = X,
+                          K = ncol(X),
+                          N = nrow(model.data),
+                          J = length(unique(model.data$climate_region)),
+                          nu = 2)
+
+stan_model <- stan_model('wu_mlm_climate_region.stan', model_name = "mlm wu climate region")
+
+stan_params <- c('gamma', 'beta', 'sigma', 'tau', 'z')
+fit.regions <- sampling(stan_model, stan_data.regions, pars = stan_params, iter = 2000, chains = 3)
+
+
+g.regions <- ggs(fit.regions,family="beta")
+g.regions$num <- as.numeric(gsub("[^\\d]+", "", g.regions$Parameter, perl=TRUE)) # extract beta #'s
+g.regions$region_index <- as.numeric(substr(as.character(g.regions$num),1,1))
+g.regions$coef_index <- as.numeric(substring(as.character(g.regions$num), 2))
+g.regions$climate_region <- unique(wudata$climate_region)[g.regions$region_index]
+g.regions$Parameter <- colnames(X)[g.regions$coef_index]
+
+
+ggplot(g.regions[,c(3,4,8)]) + ylim(c(-50,50)) +
+  geom_boxplot(aes(x=Parameter,y=value), fill="grey50", outlier.shape=NA) + 
+  geom_hline(yintercept = 0) + ggtitle("Posterior estimates for climate regions") +
+  coord_flip() + theme_bw(base_size=15) + labs(x=NULL, fill="year") + facet_wrap(~climate_region)
+
+
+
+
+
+
+
+
+
 
 
 
