@@ -4,7 +4,7 @@ data {
   int<lower=1> J; // number of groups (years)
   matrix[N,K] X; // design matrix, X[,1] is column of ones
   vector[N] y; // response variable
-  int<lower=0,upper=J> year[N]; // groups
+  int<lower=1,upper=J> climate_region[N]; // groups
   real<lower = 0> nu; // LKJ parameter
 }
 
@@ -12,7 +12,7 @@ parameters {
   matrix[K,J] z;
   cholesky_factor_corr[K] L_Omega;
   vector<lower=1E-6>[K] tau;  // prior scale
-  real<lower=1E-6> sigma; // prediction error scale
+  real<lower=1E-6> sigma; // prediction error scale (for VWCI)
   row_vector[K-1] b0;
   matrix[J-1,K] g0;
 }
@@ -20,11 +20,11 @@ parameters {
 transformed parameters {
   matrix[J,K] gamma;
   matrix[J,K] beta;
-
+  
   if (J > 1) {
-  gamma[2:J] <- g0;
-  for (k in 1:K)
-    gamma[1,k] <-  -sum(g0[,k]);
+    gamma[2:J] <- g0;
+    for (k in 1:K)
+      gamma[1,k] <-  -sum(g0[,k]);
   } else {
     gamma[1] <- rep_row_vector(0.0, K);
   }
@@ -35,7 +35,7 @@ transformed parameters {
 }
 
 model {
-  vector[N] x_beta_year;
+  vector[N] x_beta_climate_region;
   
   tau ~ cauchy(0,1);
   sigma ~ normal(0,1);
@@ -45,9 +45,10 @@ model {
   L_Omega ~ lkj_corr_cholesky(nu);
   
   for (n in 1:N) {
-    x_beta_year[n] <- X[n] * beta[year[n]]';
+    x_beta_climate_region[n] <- X[n] * beta[climate_region[n]]';
   }
-  y ~ normal(x_beta_year, sigma);
-}
-
-
+    y ~ normal(x_beta_climate_region, sigma);
+  }
+    
+    
+    
