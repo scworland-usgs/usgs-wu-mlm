@@ -15,7 +15,7 @@ model {
   mu <- X * beta;
   
   //priors
-  beta ~ normal(0,10);
+  beta ~ normal(0,5);
   sigma ~ cauchy(0,5);
   
   //likelihood
