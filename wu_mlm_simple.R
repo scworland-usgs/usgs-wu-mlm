@@ -37,4 +37,3 @@ stan_data <- list(y = model.data$wn,
 
 stan_model <- stan_model('wu_mlm_regression.stan', model_name = "mlm wu regression")
 stan.fit <- sampling(stan_model, stan_data, iter = 2000, chains = 4)
-

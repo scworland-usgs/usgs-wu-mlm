@@ -1,7 +1,7 @@
 data {
   int<lower=1> N; // number of observations (counties)
   int<lower=1> K; // number of predictors including column of ones
-  int<lower=1> J; // number of groups (years)
+  int<lower=1> J; // number of groups (census regions)
   matrix[N,K] X; // design matrix, X[,1] is column of ones
   vector[N] y; // response variable
   int<lower=1,upper=J> census_region[N]; // groups
