@@ -46,7 +46,7 @@ stan.regression <- function(df, stan_model_file, stan_data,
       mutate(variable =  colnames(X)[num]) 
   
     results.short <- results.long %>% group_by(variable) %>%
-      summarise(p97.5=quantile(value, probs=0.975),
+      summarise(p97.5=quantile(value, probs=0.975), 
                 p2.5=quantile(value, probs=0.025),
                 p50=quantile(value, probs=0.5)) 
     
