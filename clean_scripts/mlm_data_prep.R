@@ -1,7 +1,7 @@
 
 library(dplyr); library(magrittr)
 
-setwd("C:/Users/scworlan/Documents/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm/clean_scripts")
+setwd("~/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm/clean_scripts")
 
 ## set "select" function to dplyr's default
 select = dplyr::select
@@ -33,3 +33,5 @@ model.data <- select(wudata,census_region,CDC_urban,wn,year,mean_summer_precip_5
   select(-length_cross_pdsi_5yr) %>% # correlated with num_cross_pdsi
   select(-pop_under20) %>% # correlated with pop_over50
   select(-c(Percent_HS,Percent_SA)) # keep only one edu metric
+
+save(model.data, file="model.data.Rda")
