@@ -26,7 +26,7 @@ model.data <- dplyr::select(wudata,cntyFIPS,climate_region,year:MSAclass, CDC_ur
   mutate(CDC_urban = as.integer(CDC_urban)) %>%
   mutate(year = as.integer(as.factor(year))) %>%
   mutate(climate_region = as.integer(climate_region)) %>%
-  mutate(wn = replace(wn, wn==0, 1)) %>%
+  mutate(wn = replace(wn, wn==0, 1.1)) %>%
   mutate(wn = log10(wn)) %>%
   mutate_each(funs(scale), -(cntyFIPS:wn)) %>%
   dplyr::select(-c(landcover_commercial, landcover_residential, landcover_industrial, landcover_water)) %>% 
@@ -45,8 +45,8 @@ variable_type <- data_frame(variable = names(model.data[,5:n]),
                                      rep("socio-economic",13)))
 
 # short names
-short.names <- data.frame(Parameter = names(model.data[,5:20]), 
-                          short.names = c("mean-ppt","max-temp","min-pdsi",
+short.names <- data.frame(variable = names(model.data[,4:20]), 
+                          short.names = c("year","mean-ppt","max-temp","min-pdsi",
                                           "cross-pdsi","agriculture","urban",
                                           "suburban","pvi","voting-pop",
                                           "mhi","poverty","BA","HS",
@@ -94,27 +94,29 @@ model.data2 <- sample_frac(model.data,0.05)
 # climate region
 
 ## build formula for climate regions
-region = "climate_region"
-lmer.formula.region <- reformulate(paste0(colnames(model.data[,5:n])," + 
-                                          (1 + ",colnames(model.data[,5:n]), "|",
+region = "CDC_urban"
+lmer.formula.region <- reformulate(paste0(colnames(model.data[,4:ncols])," + 
+                                          (1 + ",colnames(model.data[,4:ncols]), "|",
                                           region,")",collapse="+"), response = 'wn')
 
 ## fit model
-lmer.fit.region <- lmer(lmer.formula.region, data = model.data)
+lmer.fit.census <- lmer(lmer.formula.region, data = model.data)
+ 
 
 ## extract coefficients and add region names  
-cf.region = coef(lmer.fit.region)$climate_region
-cf.region$climate_region <- unique(wudata$climate_region)
+cf.lmer.urban = coef(lmer.fit.census)$CDC_urban
 
 ## long format for plot
-cfrm <- melt(cf.region)
-cfrm <- inner_join(cfrm,variable_type, by="variable")
-colnames(cfrm)[1:2] <- c("climate_region","Parameter")
+cfrm <- melt(cf.lmer.urban) %>%
+  filter(., !grepl("(Intercept)", variable))
+#cfrm <- inner_join(cfrm,variable_type, by="variable")
+colnames(cfrm)[1:2] <- c("CDC_urban","Parameter")
+
 
 ## facet plot
-ggplot(cfrm) + geom_point(aes(value, name), shape= 21, size = 3, color="black", fill="dodgerblue") + 
+ggplot(cfrm) + geom_point(aes(value, CDC_urban), shape= 21, size = 3, color="black", fill="dodgerblue") + 
   geom_vline(xintercept=0, color="black") +
-  facet_wrap(~Parameter) +
+  facet_wrap(~Parameter, ncol=2) + 
   theme_bw()
 
 # year
@@ -147,16 +149,33 @@ ggplot(cfym) + geom_point(aes(year, value), shape= 21, size = 3, color="black", 
 rstan_options(auto_write = TRUE)
 options(mc.cores = parallel::detectCores())
 
-X <- model.matrix( ~., model.data[,5:n])
+X <- model.matrix( ~., model.data[,4:ncols])
 X2 <- model.matrix( ~., model.data2[,5:n])
 
 # completely pooled
 ## lm 
-lm.pooled <- lm(model.data$wn~X)$coef %>% data.frame() 
+lm.pooled <- lm(reformulate(colnames(model.data[,4:ncols]),response='wn'),data=model.data)$coef %>% 
+  data.frame() %>%
+  add_rownames() %>%
+  setNames(c("variable","value.lm.pooled")) %>%
+  inner_join(short.names, by ="variable") %>%
+  mutate(short.names=factor(short.names, 
+                            levels=short.names[order(value.lm.pooled)], 
+                            ordered=TRUE))
+
+
 lm.pooled %<>% mutate(Parameter=row.names(lm.pooled))
 colnames(lm.pooled)[1]="value.lm"
 lm.pooled %<>% filter(value.lm < 1.5) %>% 
-  mutate(Parameter = substring(Parameter, 2))
+  mutate(variable = substring(Parameter, 2)) %>%
+  inner_join(short.names, by ="variable") %>%
+  mutate(short.names=factor(short.names, 
+                         levels=short.names[order(value.lm)], 
+                         ordered=TRUE))
+
+ggplot(lm.pooled) + geom_hline(yintercept=0, color="black") +
+  geom_point(aes(short.names, value.lm), size=2, color="dodgerblue") + theme_bw() + xlab("") +
+  coord_flip() 
 
 ## stan
 stan_data.pooled <- list(y = model.data$wn,
@@ -413,7 +432,7 @@ ggplot(g.cens.regions2) +
 # 
 # fit.cens.regions_invw <- sampling(stan_model.census_invw, stan_data.cen.regions.invw, iter = 2000, chains = 1)
 
-# lmer census:years
+# lmer census:years ----
 region = "census_region:year"
 lmer.form.cen.year <- reformulate(paste0( paste0(colnames(model.data3[,5:n])," + 
                                                        (1 + ",colnames(model.data3[,5:n]), "|",
@@ -430,4 +449,154 @@ lmer.cen.year.cf <- coef(lmer.cen.years)$'census_region:year' %>% data.frame() %
 ggplot(lmer.cen.year.cf) + geom_point(aes(year,value, color = factor(census.region))) +
   geom_line(aes(year,value, color = factor(census.region))) + facet_wrap(~variable) +
   labs(color="Census Region") + theme_bw(base_size=12) + geom_hline(yintercept=0)
+
+# Climate Regions as levels ----
+
+stan_data.regions <- list(y = model.data$wn,
+                          climate_region = model.data$climate_region,
+                          X = X,
+                          K = ncol(X),
+                          N = nrow(model.data),
+                          J = length(unique(model.data$climate_region)),
+                          nu = 2)
+
+stan_model.climate <- stan_model('wu_mlm_climate_region.stan', model_name = "mlm wu climate region")
+
+stan_params <- c('gamma', 'beta', 'sigma', 'tau', 'z')
+fit.climate.regions <- sampling(stan_model.climate, stan_data.regions, pars = stan_params, iter = 2000, chains = 1)
+launch_shinystan(fit.regions)
+
+# posterior distributions for regions mlm
+g.regions <- ggs(fit.regions,family="beta") %>% 
+  mutate(num = as.numeric(gsub("[^\\d]+", "", g.regions$Parameter, perl=TRUE))) %>%
+  mutate(regions_index = as.numeric(substr(as.character(g.regions$num),1,1))) %>%
+  mutate(coef_index = as.numeric(substring(as.character(g.regions$num), 2))) %>%
+  mutate(regions = as.character(unique(wudata$regions)[g.regions$regions_index])) %>%
+  mutate(Parameter =  colnames(X)[g.regions$coef_index])
+
+# boxplot of distributions
+ggplot(g.regions[,c(3,4,8)]) + ylim(c(-1,1)) +
+  geom_boxplot(aes(x=climate_region,y=value), fill="grey50", outlier.shape=NA) + 
+  geom_hline(yintercept = 0) + ggtitle("Posterior estimates for climate regions") +
+  coord_flip() + theme_bw(base_size=11) + labs(x=NULL, fill="year") + facet_wrap(~Parameter)
+
+# mean, 5%, and 95% for stan estimates and lmer pt estimates
+g.regions2 <- g.regions %>% group_by(Parameter, climate_region) %>%
+  summarise(p95=quantile(value, probs=0.95),
+            p05=quantile(value, probs=0.05),
+            value=mean(value)) %>%
+  filter(value < 1.5) %>%
+  filter(Parameter != "CDC_urban") %>%
+  inner_join(cfrm, by=c("Parameter", "climate_region")) %>%
+  inner_join(g.pooled, by = "Parameter") %>%
+  mutate(sign = ifelse(value.x>0, 1, 0))
+
+
+ggplot(g.cens.regions2) + 
+  geom_pointrange(aes(cens.regions, value.x, ymin=p05, ymax=p95, fill=factor(sign)), shape=21,size=0.3) + 
+  #geom_point(aes(cens.regions, value.y), color="red", size=1) +
+  #geom_hline(yintercept=0, color="black") +
+  scale_fill_manual(values = c("white","black"), lab=c("negative","positive")) +
+  labs(fill="sign") +
+  geom_hline(aes(yintercept=p05.pooled), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept=p95.pooled), color="blue", linetype="dashed") +
+  facet_wrap(~Parameter) + coord_flip() + ylim(c(-0.2,0.25)) +
+  theme_bw() + xlab("census region") + ylab("posterior distribution with 95% HDI")
+
+## point range + lmer estimates
+ggplot(g.regions2) + 
+  geom_pointrange(aes(climate_region, value.x, ymin=p05, ymax=p95, fill=factor(sign)), shape=21, size=0.3) + 
+  #geom_point(aes(climate_region, value.y), color="red", size=1) +
+  #geom_hline(yintercept=0, color="black") +
+  scale_fill_manual(values = c("white","black"), lab=c("negative","positive")) +
+  labs(fill="sign") +
+  geom_hline(aes(yintercept=p05.pooled), color="blue", linetype="dashed") +
+  geom_hline(aes(yintercept=p95.pooled), color="blue", linetype="dashed") +
+  facet_wrap(~Parameter) + ylim(c(-0.5,0.5)) + coord_flip() +
+  theme_bw() + xlab("climate region") + ylab("posterior distribution with 95% HDI")
+
+# Urban class as levels ----
+model.data4 <- dplyr::select(wudata,cntyFIPS,CDC_urban,year:pop_over50) %>%
+  mutate(CDC_urban = as.integer(CDC_urban)) %>%
+  mutate(year = as.integer(as.factor(year))) %>%
+  mutate(wn = replace(wn, wn==0, 1)) %>%
+  mutate(wn = log10(wn)) %>%
+  mutate_each(funs(scale), -(cntyFIPS:wn)) %>%
+  dplyr::select(-grep("landcover", colnames(.))) %>% 
+  dplyr::select(-length_cross_pdsi_5yr) %>% # correlated with num_cross_pdsi
+  dplyr::select(-pop_under20) %>% # correlated with pop_over50
+  dplyr::select(-Percent_SA) # correlated with % BA
+
+## lmer urban classification
+## classes and levels
+cdc_urban <- data.frame(names = levels(wudata$CDC_urban),
+                        levels = unique(as.numeric(model.data4$CDC_urban)))
+
+# build lmer formula
+region = "CDC_urban"
+lmer.formula.cdc_urban <- reformulate(paste0( paste0(colnames(model.data[,5:17])," + 
+                                                       (1 + ",colnames(model.data[,5:17]), "|",
+                                                       region,")",collapse="+")), response = 'wn')
+
+## fit model
+lmer.fit.cdc_urban <- lmer(lmer.formula.cdc_urban, data = model.data)
+
+## extract coefficients and add region names  
+cf.cdc.urban = coef(lmer.fit.cdc_urban)$CDC_urban %>%
+  mutate(levels=as.numeric(unique(lmer.fit.cdc_urban@flist$CDC_urban))) %>%
+  inner_join(cdc_urban, by="levels") %>% 
+  dplyr::select(-levels) %>%
+  dplyr::select(-grep("Intercept", colnames(.))) %>%
+  melt(., id.vars="names")
+
+
+## STAN
+X <- model.matrix( ~., model.data4[,5:17])
+stan_data.CDC_urban <- list(y = model.data4$wn,
+                            CDC_urban = model.data4$CDC_urban,
+                            X = X,
+                            K = ncol(X),
+                            N = nrow(model.data4),
+                            J = length(unique(model.data4$CDC_urban)),
+                            nu = 2)
+
+stan_model.cdc_urban <- stan_model('wu_mlm_cdc_urban.stan', model_name = "mlm wu cdc urban")
+
+stan_params <- c('gamma', 'beta', 'sigma', 'tau', 'z')
+fit.CDC_urban <- sampling(stan_model.cdc_urban, stan_data.CDC_urban, pars = stan_params, iter = 2000, chains = 1)
+
+g.cdc_urban <- ggs(fit.CDC_urban,family="beta") %>% 
+  mutate(num = as.numeric(gsub("[^\\d]+", "", Parameter, perl=TRUE))) %>%
+  mutate(levels = as.numeric(substr(as.character(num),1,1))) %>%
+  mutate(coef.index = as.numeric(substring(as.character(num), 2))) %>%
+  mutate(names=unique(levels(wudata$CDC_urban))[levels]) %>%
+  mutate(variable =  colnames(X)[coef.index])
+
+
+g.cdc_urban2 <- g.cdc_urban %>% group_by(variable, names) %>%
+  summarise(p95=quantile(value, probs=0.975),
+            p05=quantile(value, probs=0.025),
+            value=mean(value)) %>%
+  filter(value < 1.5) %>%
+  inner_join(cf.cdc.urban, by=c("variable", "names"))
+
+g.cdc_urban2$names <- factor(g.cdc_urban2$names, levels = c("central_metro", "fringe_metro", 
+                                                            "medium_metro", "small_metro",
+                                                            "micropolitan", "non_core"))
+
+
+
+ggplot(g.cdc_urban2) + 
+  geom_pointrange(aes(names, value.x, ymin=p05, ymax=p95), size=0.2) + 
+  geom_point(aes(names, value.y), color="red",size=1) +
+  geom_hline(yintercept=0, color="black") + theme_bw() +
+  facet_wrap(~variable, ncol=2) + coord_flip() + 
+  xlab(expression(urban %->% rural)) 
+  
+  
+  
+
+
+
+
 

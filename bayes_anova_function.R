@@ -27,7 +27,7 @@ bayes.anova <- function(df, y, group, iter=1000, chains=4) {
   anova.df <- data.frame(anova.df,
                          Source = factor(rownames(anova.df),
                                          levels = rownames(anova.df),
-                                         labels = c("error", group)),
+                                         labels = c(paste("within", group), paste("among", group))),
                          df = with(anova.list, c(N-J, J-1)))
   
   return(anova.df)

@@ -21,17 +21,17 @@ urban.levels <- c("central_metro", "fringe_metro",
 wudata$CDC_urban <- factor(wudata$CDC_urban, levels = urban.levels)
 
 # prepare model data, comments are after each line
-model.data <- select(wudata,census_region,CDC_urban,wn,year,mean_summer_precip_5yr:pop_over50) %>%
+model.data <- select(wudata,census_region,CDC_urban,wn,mean_summer_precip_5yr:pop_over50) %>%
   mutate(CDC_urban = as.integer(CDC_urban)) %>% # convert to numeric for stan
-  mutate(year = as.integer(as.factor(year))) %>% # convert to numeric for stan
+  #mutate(year = as.integer(as.factor(year))) %>% # convert to numeric for stan
   mutate(census_region = as.integer(census_region)) %>% # convert to numeric for stan
   mutate(wn = replace(wn, wn==0, 1.1)) %>%
   mutate(wn = log10(wn)) %>% # convert response to log scale
-  mutate_each(funs(scale), -(census_region:wn)) %>% # scale predictors
+  mutate_each(funs(as.numeric(scale(.))), -(census_region:wn)) %>% # scale predictors
   # following landcover classes are highly correlated (~0.9) with "developed" class
-  select(-c(landcover_commercial, landcover_residential, landcover_industrial)) %>% 
+  select(-c(landcover_commercial, landcover_residential, landcover_industrial, landcover_water)) %>% 
   select(-length_cross_pdsi_5yr) %>% # correlated with num_cross_pdsi
-  select(-pop_under20) %>% # correlated with pop_over50
-  select(-c(Percent_HS,Percent_SA)) # keep only one edu metric
+  select(-c(pop_under20, pop)) %>% # correlated with pop_over50 and pop is used in Wn
+  select(-c(Percent_HS, Percent_BA)) # keep only one edu metric (%SA)
 
 save(model.data, file="model.data.Rda")
