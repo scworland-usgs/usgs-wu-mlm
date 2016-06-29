@@ -1,7 +1,7 @@
 
 library(dplyr); library(lme4); library(ggplot2)
 
-# fraction of data for testing (runs faster)
+# load data (see mlm_data_prep.R)
 load("model.data.Rda")
 
 # useful values
@@ -120,7 +120,7 @@ colnames(urban_freqm)[3] <- "type"
 ggplot(urban_freqm) + 
   geom_errorbar(data=urban.summary,(aes(short.names, ymin=p2.5, ymax=p97.5)), 
                 size=0.5, alpha=1, width=0.5) +
-  geom_point(aes(short.names,value, fill=type), shape=21, size=2, alpha=0.8) +
+  geom_point(aes(short.names,value, fill=type), shape=21, size=2, alpha=0.5) +
   facet_wrap(~names) + coord_flip() + theme_bw() + 
   geom_hline(aes(yintercept=0)) + 
   scale_fill_manual(values = c('blue','gold','green'),

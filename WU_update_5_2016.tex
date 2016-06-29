@@ -73,7 +73,7 @@
 \begin{itemize} 
 \item Very little national water demand research
 \item If national $\longrightarrow$ low spatial resolution (eg. water resource regions, N=18) 
-\item If national $\longrightarrow$ higher resolution (eg. counties) $\longrightarrow$ overly simple models (eg. population coefficients, weighted area)
+\item If national $\longrightarrow$ higher resolution (eg. counties) $\longrightarrow$ simplified models (eg. population coefficients, weighted area)
 \item \textit{No} public supply specific national water demand research
 \end{itemize}
 \vspace{-1cm}
@@ -132,6 +132,16 @@ y_i &\sim  N(\alpha_{j[i]},\sigma^2_y), ~ for ~ i=1...,N \\
 
 %-------------------------------------------------------------%
 
+\begin{frame}{Covariate Database}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=2.5in]{figures/covariate_aggregation_timeline.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+
 \begin{frame}{Covariates (SI)}
 \begin{figure}[ht]
 \begin{center}
@@ -142,15 +152,16 @@ y_i &\sim  N(\alpha_{j[i]},\sigma^2_y), ~ for ~ i=1...,N \\
 
 %-------------------------------------------------------------%
 
-\begin{frame}{Covariate Database}
+\begin{frame}{Fully Pooled Parameter Estimates (SI)}
 \begin{figure}[ht]
 \begin{center}
-\includegraphics[height=2.5in]{figures/covariate_aggregation_timeline.pdf}
+\includegraphics[height=3in]{figures/best_figs/pooled_lmer_6_25_2016.pdf}
 \end{center}
 \end{figure}
 \end{frame}
 
 %-------------------------------------------------------------%
+
 \begin{frame}{Multivariate Hierarchical Model (SI)}
 \begin{figure}[ht]
 \begin{center}
@@ -197,17 +208,6 @@ y_i &\sim  N(\alpha_{j[i]},\sigma^2_y), ~ for ~ i=1...,N \\
 \begin{figure}[ht]
 \begin{center}
 \includegraphics[height=3in]{figures/best_figs/urban_all_estimates_SI.pdf}
-\end{center}
-\end{figure}
-\end{frame}
-
-%-------------------------------------------------------------%
-
-
-\begin{frame}{Posterior Correlations}
-\begin{figure}[ht]
-\begin{center}
-\includegraphics[height=3in]{figures/best_figs/posterior_beta_noyear.png}
 \end{center}
 \end{figure}
 \end{frame}

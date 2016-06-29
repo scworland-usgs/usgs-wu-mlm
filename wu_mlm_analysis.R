@@ -45,37 +45,32 @@ variable_type <- data_frame(variable = names(model.data[,5:n]),
                                      rep("socio-economic",13)))
 
 # short names
-short.names <- data.frame(variable = names(model.data[,4:20]), 
-                          short.names = c("year","mean-ppt","max-temp","min-pdsi",
-                                          "cross-pdsi","agriculture","urban",
-                                          "suburban","pvi","voting-pop",
-                                          "mhi","poverty","BA","HS",
-                                          "pop","popGrowth","pop50"))
+short.names <- data.frame(variable = names(model.data[,4:17]), 
+                          short.names = c("mean-ppt","max-temp","min-pdsi",
+                                          "cross-pdsi","agriculture",
+                                          "developed","semi-dev",
+                                          "pvi","voting-pop","mhi",
+                                          "poverty","college",
+                                          "popGrowth","pop50"))
 
 # correlation matrix for predictors
 cormat <- cor(model.data[,4:n])
 corrplot::corrplot(cormat,method="ellipse", diag=F, type = "lower")
 
 # density plot of covariates
-dens <- dplyr::select(wudata, census_region, year, mean_summer_precip_5yr:pop_over50) %>%
-  mutate(landcover_semi_dev = replace(landcover_semi_dev, landcover_semi_dev==0, 0.01)) %>%
-  mutate(num_cross_pdsi_5yr = replace(num_cross_pdsi_5yr,num_cross_pdsi_5yr==0, 1)) %>%
-  mutate_each(funs(log10), c(pop, landcover_developed, landcover_semi_dev, num_cross_pdsi_5yr)) %>%
-  mutate_each(funs(scale), -c(census_region,year)) %>%
-  dplyr::select(-c(landcover_commercial, landcover_residential, landcover_industrial, landcover_water)) %>% 
-  dplyr::select(-length_cross_pdsi_5yr) %>% # correlated with num_cross_pdsi
-  dplyr::select(-pop_under20) %>% # correlated with pop_over50
-  dplyr::select(-Percent_SA) %>% # correlated with % BA
-  #rename(avppt = mean_summer_precip_5yr,mxtemp=mean_max_temp_5yr,mnpdsi=mean_min_pdsi_5yr,
-         #crspdsi=num_cross_pdsi_5yr, ag=landcover_agriculture, dev=landcover_developed,
-         #semidev=landcover_semi_dev,vote=voting_pop, pov=poverty, BA=Percent_BA,HS=Percent_HS,
-         #popgrow=popGrowth_5yr,pop50=pop_over50) %>%
-  melt(id.vars=c("census_region","year")) 
+dens <- dplyr::select(model.data, mean_summer_precip_5yr:pop_over50) %>%
+  mutate(census_region = wudata$census_region, 
+         CDC_urban = wudata$CDC_urban, 
+         landcover_developed = log10(wudata$'landcover_developed'),
+         landcover_semi_dev = log10(wudata$'landcover_semi_dev'),
+         num_cross_pdsi_5yr = log10(wudata$'num_cross_pdsi_5yr')) %>%
+  melt(id.vars=c("census_region","CDC_urban")) %>%
+  inner_join(shorter.names, by = "variable")
 
 p.dens <- ggplot(dens,aes(x = value, group=factor(census_region), fill = factor(census_region))) + 
   geom_density(alpha = 0.5) + theme_bw() +
   scale_fill_brewer(palette="YlGnBu",name=NULL) +
-  facet_wrap(~variable, scales="free") +
+  facet_grid(CDC_urban~short.names, scales="free_y") +
   theme(axis.ticks = element_blank(),
         axis.text = element_blank(),
         axis.title = element_blank(),

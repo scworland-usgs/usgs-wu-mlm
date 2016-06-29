@@ -174,7 +174,7 @@ census.summary <- stan.fit.census[3] %>% data.frame() %>%
 
 census.summary$names <- factor(census.summary$names, levels = levels(wudata$census_region))
 
-cols2 <- c('#ffffcc','#a1dab4','black','#41b6c4','#225ea8')
+cols2 <- c('#ffffcc','#a1dab4','#41b6c4','#225ea8')
 
 # old plot
 ggplot(census.summary) + 
