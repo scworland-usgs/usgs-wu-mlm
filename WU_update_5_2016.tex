@@ -1,0 +1,219 @@
+\documentclass[pdf]{beamer}
+
+\mode<presentation>{}
+%% preamble
+\title{Water use paper update}
+%\subtitle{The subtitle}
+\author{Scott Worland}
+\begin{document}
+
+%% title frame
+\begin{frame}
+\titlepage
+\end{frame}
+
+%-------------------------------------------------------------%
+
+%% Water sustainability
+\begin{frame}{Uncertain Water Sustainability Projections}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=1.4in]{roy_water_sustain_index.png}
+\end{center}
+\end{figure}
+
+{\tiny \begin{quote} {\normalfont Roy, S. B., Chen, L., Girvetz, E. H., Maurer, E. P., Mills, W. B., \& Grieb, T. M. (2012). Projecting water withdrawal and supply for future decades in the US under climate change scenarios. Environmental science \& technology, 46(5), 2545-2556.} \end{quote}}
+
+\end{frame}
+
+%-------------------------------------------------------------%
+
+%% Water sustainability
+\begin{frame}{Uncertain Water Sustainability Projections}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=2.3in]{pnas_hejazi_water_stress.png}
+\end{center}
+\end{figure}
+
+{\tiny \begin{quote} {\normalfont Hejazi, M. I., Voisin, N., Liu, L., Bramer, L. M., Fortin, D. C., Hathaway, J. E., ... \& Liu, Y. (2015). 21st century United States emissions mitigation could increase water stress more than the climate change it is mitigating. Proceedings of the National Academy of Sciences, 112(34), 10635-10640.} \end{quote}}
+
+\end{frame}
+
+%-------------------------------------------------------------%
+
+%% Research needs
+\begin{frame}{Water Demand Research Gaps}
+
+{\small \begin{quote}``The hydrology community has developed many spatially distributed hydrologic models focusing on the heterogeneity of biophysical parameters and processes. However... the human dimension is usually inserted in a 'lumped' form, assuming centralized institutions and ignoring the heterogeneity of water users and/or stakeholders’ behaviors. Thus, the primary and perhaps most formidable challenge involves a quantitative description of the behavior of individuals (e.g., stakeholders and decision makers) as well as social institutions and communities'' \end{quote}}
+
+{\small \begin{quote} ``...need for hydrologists to develop comprehensive data and information systems which summarize factors that determine water use... under varying climate, socioeconomic, and institutional settings.'' \end{quote}}
+
+{\tiny \begin{quote} {\normalfont Vogel, R. M., Lall, U., Cai, X., Rajagopalan, B., Weiskel, P. K., Hooper, R. P., \& Matalas, N. C. (2015). Hydrology: The interdisciplinary science of water. Water Resources Research, 51(6), 4409-4430..} \end{quote}}
+\end{frame}
+
+%-------------------------------------------------------------%
+
+%% National data
+\begin{frame}{Decrease in Withdrawals (main)}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=2.3in]{figures/best_figs/national_summary.pdf}
+\end{center}
+\end{figure}
+
+{\tiny \begin{quote} {\normalfont Maupin, M. A., Kenny, J. F., Hutson, S. S., Lovelace, J. K., Barber, N. L., \& Linsey, K. S. (2014). Estimated use of water in the United States in 2010 (No. 1405). US Geological Survey. } \end{quote}}
+
+\end{frame}
+
+%-------------------------------------------------------------%
+
+%% Research needs
+\begin{frame}{Water Demand Research Gaps}
+\begin{itemize} 
+\item Very little national water demand research
+\item If national $\longrightarrow$ low spatial resolution (eg. water resource regions, N=18) 
+\item If national $\longrightarrow$ higher resolution (eg. counties) $\longrightarrow$ overly simple models (eg. population coefficients, weighted area)
+\item \textit{No} public supply specific national water demand research
+\end{itemize}
+\vspace{-1cm}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=1.7in]{public_supply_withdrawals.pdf}
+\end{center}
+\end{figure}
+
+\end{frame}
+
+%-------------------------------------------------------------%
+
+%% Research questions
+\begin{frame}{Research Questions}
+\begin{block}<1->{Question 1}
+Does geographic region or time account for more variability in county water use efficiency? 
+\end{block}
+\vspace{0.5 cm}
+\begin{block}<2->{Question 2}
+What variables, socio-economic and environmental, are likely drivers of changes in water use efficiency?
+\end{block}
+\vspace{0.5 cm}
+\begin{block}<3->{Question 3}
+How are the effects of county-level explanatory variables moderated by the regional water use context?
+\end{block}
+\end{frame}
+
+%-------------------------------------------------------------%
+
+\begin{frame}{ANOVA (main)}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=2.1in]{figures/best_figs/bayes_anova.pdf}
+\end{center}
+\end{figure}
+\vspace{-0.5 cm}
+\footnotesize
+\begin{align*} 
+y_i &\sim  N(\alpha_{j[i]},\sigma^2_y), ~ for ~ i=1...,N \\
+\alpha_j &\sim  N(\mu_\alpha,\sigma^2_\alpha), ~ for ~ j=1...,J \\
+\mu_\alpha &\sim N(0,3)T[0,\infty],
+\end{align*}
+\normalsize
+\end{frame}
+
+%-------------------------------------------------------------%
+
+\begin{frame}{Higher-Level Groups (main)}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=3in]{figures/best_figs/county_census_urban_wn.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+
+\begin{frame}{Covariates (SI)}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=3in]{figures/best_figs/covariates_density.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+
+\begin{frame}{Covariate Database}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=2.5in]{figures/covariate_aggregation_timeline.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+\begin{frame}{Multivariate Hierarchical Model (SI)}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=3in]{figures/krushke_5_2016.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+
+\begin{frame}{Parameter Estimates MLM (main)}
+
+\vspace{-0.4cm}
+
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=1.3in]{figures/best_figs/census_stan_wide.pdf}
+\end{center}
+\end{figure}
+
+\vspace{-0.8cm}
+
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=1.3in]{figures/best_figs/urban_stan_wide.pdf}
+\end{center}
+\end{figure}
+
+\end{frame}
+
+%-------------------------------------------------------------%
+
+\begin{frame}{Full Estimates Census Regions (SI)}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=3in]{figures/best_figs/census_all_estimates_SI.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+
+\begin{frame}{Full Estimates Urban Class (SI)}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=3in]{figures/best_figs/urban_all_estimates_SI.pdf}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+
+
+\begin{frame}{Posterior Correlations}
+\begin{figure}[ht]
+\begin{center}
+\includegraphics[height=3in]{figures/best_figs/posterior_beta_noyear.png}
+\end{center}
+\end{figure}
+\end{frame}
+
+%-------------------------------------------------------------%
+ 
+\end{document}
+
+
