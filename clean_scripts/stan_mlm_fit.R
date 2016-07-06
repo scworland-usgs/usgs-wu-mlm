@@ -37,34 +37,70 @@ stan_data.pooled <- list(y = model.data$wn,
                          K = ncol(X),
                          N = nrows)
 
-## fit the pooled model... takes about 4 minutes
-stan.fit.pooled <- stan.regression(wudata, 'simple_reg_stan.stan', stan_data.pooled, 
-                                   stan_params=NULL, iter = 2000, chains = 4, group.name=NULL)
+## fit pooled model using normal prior
+stan.fit.pooled.ridge <- stan.regression(wudata, 'sparse_regression_ridge.stan', stan_data.pooled, 
+                                   stan_params=NULL, iter = 1000, chains = 2, group.name=NULL)
+
+## fit regularized model using horseshoe prior
+stan.fit.pooled.hs <- stan.regression(wudata, 'sparse_regression_hs.stan', stan_data.pooled, 
+                                      stan_params=NULL, iter = 1000, chains = 2, group.name=NULL)
+
+## fit regularized model using laplace prior (LASSO)
+stan.fit.pooled.lasso <- stan.regression(wudata, 'sparse_regression_lasso.stan', stan_data.pooled, 
+                                      stan_params=NULL, iter = 1000, chains = 2, group.name=NULL)
 
 ## extract stan object
-fit.pooled_stan <- sflist2stanfit(stan.fit.pooled[1])
+fit.pooled_stan.ridge <- sflist2stanfit(stan.fit.pooled.ridge[1])
+fit.pooled_stan.hs <- sflist2stanfit(stan.fit.pooled.hs[1])
 
 ## extract data frame with all samples
-pooled.all <- stan.fit.pooled[2] %>% data.frame()
+pooled.all.ridge <- stan.fit.pooled.ridge[2] %>% data.frame()
+pooled.all.hs <- stan.fit.pooled.hs[2] %>% data.frame()
 
-## extract summary data frame
-pooled.summary <- stan.fit.pooled[3] %>% data.frame() %>% 
+## extract summary data frames
+pooled.summary.ridge <- stan.fit.pooled.ridge[3] %>% data.frame() %>% 
   filter(., !grepl("(Intercept)", variable)) %>% 
-  mutate(names="pooled") %>% 
+  mutate(names="Normal") %>% 
   select(variable, names, p97.5, p2.5, p50) %>%
   inner_join(short.names, by ="variable") %>%
   mutate(short.names=factor(short.names, 
                             levels=short.names[order(p50)], 
                             ordered=TRUE))
   
+pooled.summary.hs <- stan.fit.pooled.hs[3] %>% data.frame() %>% 
+  filter(., !grepl("(Intercept)", variable)) %>% 
+  mutate(names="Horseshoe") %>% 
+  select(variable, names, p97.5, p2.5, p50) %>%
+  inner_join(short.names, by ="variable") %>%
+  mutate(short.names=factor(short.names, 
+                            levels=short.names[order(p50)], 
+                            ordered=TRUE)) 
+
+pooled.summary.lasso <- stan.fit.pooled.lasso[3] %>% data.frame() %>% 
+  filter(., !grepl("(Intercept)", variable)) %>% 
+  mutate(names="Laplace") %>% 
+  select(variable, names, p97.5, p2.5, p50) %>%
+  inner_join(short.names, by ="variable") %>%
+  mutate(short.names=factor(short.names, 
+                            levels=short.names[order(p50)], 
+                            ordered=TRUE)) 
+
+pooled.summary.all <- pooled.summary.ridge %>%
+  rbind(pooled.summary.hs) %>%
+  rbind(pooled.summary.lasso)
+  
 
 ## plot coefficients
-ggplot(pooled.summary) + geom_hline(yintercept=0, color="black") +
-  geom_linerange(aes(short.names, ymin=p2.5, ymax=p97.5), color = "dodgerblue", size=0.5) +
-  geom_point(aes(short.names, p50), size=2, color="dodgerblue") + theme_bw() + xlab("") +
-  #geom_point(data=lm.pooled, aes(short.names, value.lm), size=1, color="red") +
+ggplot(pooled.summary.all) + geom_hline(yintercept=0, color="black") +
+  geom_pointrange(aes(short.names, p50, ymin=p2.5, ymax=p97.5, fill=names, color=names), shape=21, 
+                  alpha=0.9, size=0.6, position=position_dodge(width=c(0.2,0.2))) +
+  geom_point(data=lm.pooled, aes(short.names, value.lm.pooled), color="red") +
   coord_flip() + ylab(expression(post. ~ distribution ~ of ~ beta ~ parameters)) +
-  ggtitle("Pooled Parameter Estimates")
+  ggtitle("Pooled Parameter Estimates") + theme_bw() + xlab("") +
+  scale_color_manual(values=c("grey20","dodgerblue","orange"), guide=F) +
+  scale_fill_manual(values=c("grey20","dodgerblue","orange"), 
+                     name = expression(prior~beta~dist.))
+  
 
 
 # stan mlm regression model for urban class ----
