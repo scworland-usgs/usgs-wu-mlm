@@ -20,8 +20,7 @@ county_choropleth(wudata.mean)
 p_wn <- wudata %>%   
   mutate(wn = replace(wn, wn==0, 1.1)) %>%
   mutate(wn = log10(wn)) %>%
-  select(cntyFIPS,census_region,year,
-         wn,mean_summer_precip_5yr) %>%
+  select(cntyFIPS,wn,mean_summer_precip_5yr) %>%
   rename(p = mean_summer_precip_5yr) %>%
   group_by(cntyFIPS) %>%
   mutate_each(funs(as.numeric(scale(.))), wn, p) %>%
@@ -52,13 +51,13 @@ county_choropleth(p_wn.slope, title = "slopes for wn ~ precip",
 
 p_wn_regions <- p_wn.slope %>%
   rename(cntyFIPS=region) %>%
-  inner_join(wudata, by = "cntyFIPS") %>%
-  select(census_region, value) 
+  inner_join(wudata, by = "cntyFIPS") 
+
   
   
 ggplot(p_wn_regions) + 
-  geom_boxplot(aes(census_region, value), fill = "dodgerblue") +
-  geom_violin(aes(census_region, value), fill = "grey", alpha=0.4) + 
+  geom_boxplot(aes(CDC_urban, value), fill = "dodgerblue") +
+  geom_violin(aes(CDC_urban, value), fill = "grey", alpha=0.4) + 
   theme_bw() + ggtitle("slopes for wn~precip") + xlab(NULL) +
   ylab("slope")
 
