@@ -22,9 +22,9 @@ p_wn <- wudata %>%
   mutate(wn = log10(wn)) %>%
   select(cntyFIPS,wn,mean_summer_precip_5yr) %>%
   rename(p = mean_summer_precip_5yr) %>%
-  group_by(cntyFIPS) %>%
+  #group_by(cntyFIPS) %>%
   mutate_each(funs(as.numeric(scale(.))), wn, p) %>%
-  ungroup() %>%
+  #ungroup() %>%
   na.omit()
 
 p_wn.cor <- p_wn %>%
@@ -40,7 +40,7 @@ p_wn.slope <- p_wn %>%
   rename(region=cntyFIPS) 
   
 
-county_choropleth(p_wn.slope, title = "slopes for wn ~ precip", 
+county_choropleth(p_wn.slope, title = "slopes for wn ~ precip"), 
                   num_colors = 1) +
   scale_fill_gradient2(low = muted("red"), 
                        mid = "white", 
