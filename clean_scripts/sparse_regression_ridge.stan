@@ -1,5 +1,3 @@
-
-
 data {
   int<lower=1> N;
   int<lower=1> K;
@@ -17,10 +15,9 @@ model {
   mu <- X * beta;
   
   //priors
-  beta ~ double_exponential(0,0.001);
-  sigma ~ cauchy(0,0.001);
+  beta ~ normal(0,0.01);
+  sigma ~ cauchy(0,0.01);
   
   //likelihood
   y ~ normal(mu, sigma);
 }
-
