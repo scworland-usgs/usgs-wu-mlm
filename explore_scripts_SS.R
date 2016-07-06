@@ -54,10 +54,9 @@ p_wn_regions <- p_wn.slope %>%
   inner_join(wudata, by = "cntyFIPS") 
 
   
-  
 ggplot(p_wn_regions) + 
-  geom_boxplot(aes(CDC_urban, value), fill = "dodgerblue") +
-  geom_violin(aes(CDC_urban, value), fill = "grey", alpha=0.4) + 
+  geom_boxplot(aes(census_region, value, fill = CDC_urban)) +
+  geom_violin(aes(census_region, value), fill = "grey", alpha=0.3) + 
   theme_bw() + ggtitle("slopes for wn~precip") + xlab(NULL) +
   ylab("slope")
 
