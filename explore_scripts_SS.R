@@ -1,7 +1,7 @@
 
 # Scripts in response to S.Steinschneider email thread July 2016
 pacman::p_load(choroplethr,choroplethrMaps, scales, magrittr, dplyr,
-               ggplot2)
+               ggplot2, ggtern)
 
 # set working directory
 setwd("~/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm")
@@ -40,7 +40,7 @@ p_wn.slope <- p_wn %>%
   rename(region=cntyFIPS) 
   
 
-county_choropleth(p_wn.slope, title = "slopes for wn ~ precip"), 
+county_choropleth(p_wn.slope, title = "slopes for wn ~ precip", 
                   num_colors = 1) +
   scale_fill_gradient2(low = muted("red"), 
                        mid = "white", 
@@ -62,6 +62,52 @@ ggplot(p_wn_regions) +
 
 
 
+# lancover industry + commercial vs residential
+lc_data <- read.csv('landcover_2012_county.csv') %>%
+  select(region = cntyFIPS,
+         com = COMMERC_22_2012, 
+         ind = INDUST.MIL_23_2012, 
+         res.high = RESID_HI_25_2012,
+         res.low = RESID_LO_26_2012,
+         urb = URB_OTHER_27_2012) %>%
+  mutate(res = res.high + res.low,
+         ind.com = ind + com) 
+
+ggplot(lc_data) + geom_point(aes(res_low, com))
+
+# county map
+lc_map <- lc_data %>%
+  select(region, value=res.low)
+
+county_choropleth(lc_map, title = "landcover low-residential 2012", 
+                  num_colors = 1) +
+  scale_fill_gradient2(low = "white", 
+                       mid = "yellow", 
+                       high = "red", 
+                       midpoint = 0.2,
+                       na.value = "black", 
+                       breaks = pretty(lc_map$value, n = 5))
 
 
+# ternary plots
+lc_data2 <- lc_data %>% 
+  rename(commercial = com, 
+         residential = res, 
+         industrial = ind) %>%
+  inner_join(wudata.mean)
+
+
+ggtern(lc_data2,aes(commercial,industrial,residential)) + 
+  stat_density_tern(geom='polygon',n = 1000, aes(fill  = ..level.., alpha = ..level..)) +
+  scale_fill_gradient(low = "blue",high = "red")  +
+  guides(color = "none", fill = "none", alpha = "none") +
+  theme_rgbg() + theme_hidetitles() +
+  labs(title = "Relative 2012 landcover for U.S. counties") 
+
+
+ggtern(lc_data2,aes(urb+res.high,res.low,commercial)) + 
+  geom_point(alpha=1, aes(color=value)) +  
+  scale_color_gradient2(low="khaki1",mid="red",high="blue",midpoint=400) +
+  theme_rgbw() + theme_hidetitles() + labs(color="g/p/d") +
+  labs(title = "Water use by relative landcover for U.S. counties") 
 
