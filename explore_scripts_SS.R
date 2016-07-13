@@ -71,20 +71,23 @@ lc_data <- read.csv('landcover_2012_county.csv') %>%
          res.low = RESID_LO_26_2012,
          urb = URB_OTHER_27_2012) %>%
   mutate(res = res.high + res.low,
-         ind.com = ind + com) 
+         ind.com = ind + com,
+         icr = res/(res + (ind.com+0.00001)))
+  
+
 
 ggplot(lc_data) + geom_point(aes(res_low, com))
 
 # county map
 lc_map <- lc_data %>%
-  select(region, value=res.low)
+  select(region, value=icr)
 
-county_choropleth(lc_map, title = "landcover low-residential 2012", 
+county_choropleth(lc_map, title = "landcover residential vs industrial and commercial", 
                   num_colors = 1) +
-  scale_fill_gradient2(low = "white", 
-                       mid = "yellow", 
+  scale_fill_gradient2(low = "blue", 
+                       mid = "white", 
                        high = "red", 
-                       midpoint = 0.2,
+                       midpoint = 0.5,
                        na.value = "black", 
                        breaks = pretty(lc_map$value, n = 5))
 
