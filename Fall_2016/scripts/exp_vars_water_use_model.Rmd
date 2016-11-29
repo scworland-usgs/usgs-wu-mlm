@@ -1,0 +1,704 @@
+---
+title: "Data for National Water Use Model"
+author: "Scott Worland"
+date: "November 22 2016"
+output: pdf_document
+header-includes:
+  - \usepackage{longtable}
+---
+  
+```{r, echo=F}
+knitr::opts_chunk$set(fig.width=7,fig.height=5,fig.align = 'center', warning=F, message=F,cache=F)
+knitr::opts_knit$set(root.dir = '~/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm/Fall_2016')
+
+library(pacman)
+pacman::p_load(ggplot2,dplyr,reshape2,xtable,magrittr,
+               stringr,readxl,maps,choroplethr,ggmap,purrr, 
+               viridis,acs,feather,gridExtra,corrr)
+
+setwd("~/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm/Fall_2016")
+```
+
+```{r, echo=F}
+# mask read_excel to surpress output
+read_excel <-  function(...) {
+  quiet_read <- purrr::quietly(readxl::read_excel)
+  out <- quiet_read(...)
+  if(length(c(out[["warnings"]], out[["messages"]])) == 0)
+    return(out[["result"]])
+  else readxl::read_excel(...)
+}
+
+summarize = dplyr::summarize
+rename = dplyr::rename
+```
+
+# Response variable: county level water use
+
+The first step is to [load the data](http://water.usgs.gov/watuse/data/2010/index.html). A data dictionary for the USGS data can be found [here](http://water.usgs.gov/watuse/data/2010/datadict.html).
+
+```{r}
+# build state name and abb data.frame
+states <- data.frame(state.abb,state=state.name, stringsAsFactors = F) %>%
+  bind_rows(data.frame(state.abb="DC", state="district of columbia", 
+                       stringsAsFactors = F))
+
+# url for wudata file
+wudata.file <- "http://water.usgs.gov/watuse/data/2010/usco2010.txt"
+
+# load datafile and add columns
+wudata <- read.delim(wudata.file, stringsAsFactors=F) %>%
+  setNames(str_to_lower(names(.))) %>%
+  filter(!state %in% c("AK","HI","PR","VI")) %>%
+  select(cnty_fips=fips, state.abb=state, county, year, cnty_pop=tp.totpop,
+         pop_served=ps.topop, wthdrw_gw=ps.wgwfr, wthdrw_sw=ps.wswfr, 
+         wthdrw_tw=ps.wfrto) %>%
+  left_join(states, by="state.abb") %>%
+  mutate(cnty_fips = str_pad(cnty_fips,5, pad = "0"),# add leading zero
+         county = str_replace_all(county, fixed(" County"), ""), # remove word "County"
+         cnty_pop = cnty_pop*1000, # convert population to raw pop
+         pop_served = pop_served*1000,
+         prop_sw=wthdrw_sw/wthdrw_tw)
+```
+
+
+# Grouping variables
+
+## County typology codes
+
+The USDA publishes a [county typology data set](http://www.ers.usda.gov/data-products/county-typology-codes.aspx). From the webpage: "The 2015 County Typology Codes classify all U.S. counties according to six mutually exclusive categories of economic dependence and six overlapping categories of policy-relevant themes. The economic dependence types include farming, mining, manufacturing, Federal/State government, recreation, and nonspecialized counties. The policy-relevant types include low education, low employment, persistent poverty, persistent child poverty, population loss, and retirement destination." Description codes can be found [here](https://wayback.archive-it.org/5923/20110913215735/http://www.ers.usda.gov/Briefing/Rurality/RuralUrbCon/).
+
+```{r, eval=F}
+# url for typology data
+typ.url <- "http://www.ers.usda.gov/webdocs/DataFiles/County_Typology_Codes__17972//
+all_final_codes.xls"
+
+# download typology file
+download.file(typ.url, "data/cnty_typology_2004.xls")
+
+# load typology file into R
+cnty_typology <- read_excel("data/cnty_typology_2004.xls", sheet = 2, col_names = T) %>%
+  select(cnty_fips=FIPSTXT,rur2urb=rururb2003,econdep,retire) %>%
+  mutate_each(funs(as.character))
+
+# add more meaningful descriptions
+## urban continuum
+rur2urb_des <- data.frame(
+  rur2urb = as.character(c(1:9)),
+  rur2urb_des = c("metro_large", # pop >= 1e6
+                  "metro_med", # pop 250,000 to 1e6
+                  "metro_small", # pop < 250,000
+                  "urb_large_adj", # pop >= 20,000, metro adjacent 
+                  "urb_large_det", # pop >= 20,000, metro detached
+                  "urb_small_adj", # pop 2500-20,000, metro adjacent
+                  "urb_small_det", # pop 2500-20,000, metro detached
+                  "rural_adj", # pop < 2500, metro adjacent
+                  "rural_det"), # pop < 2500, metro detached
+  stringsAsFactors = F)
+
+## economic dependencies
+econdep_des <- data.frame(
+  econdep = as.character(c(1:6)),
+  econdep_des = c("farming", # dependent on farming
+                  "mining", # dependent on mining
+                  "manufacuring", # dependent on manufactoring
+                  "government", # dependent on federal and/or state govt
+                  "services", # dependent on services
+                  "nonspecialized"), # nonspecialized
+  stringsAsFactors = F)
+
+cnty_typology %<>% 
+  left_join(rur2urb_des, by="rur2urb") %>% 
+  left_join(econdep_des, by="econdep") %>%
+  select(cnty_fips, rur2urb=rur2urb_des, econdep=econdep_des,retire)
+```
+
+```{r, echo=F}
+# load typology file into R
+cnty_typology <- read_excel("data/cnty_typology_2004.xls", sheet = 2, col_names = T) %>%
+  select(cnty_fips=FIPSTXT,rur2urb=rururb2003,econdep,retire) %>%
+  mutate(cnty_fips=as.numeric(cnty_fips) %>%
+           round(.,0) %>%
+           as.character() %>%
+           str_pad(5, pad = "0")) %>%
+  mutate_each(funs(as.character))
+
+# add more meaningful descriptions
+## urban continuum
+rur2urb_des <- data.frame(
+  rur2urb = as.character(c(1:9)),
+  rur2urb_des = c("metro_large", # pop >= 1e6
+                  "metro_med", # pop 250,000 to 1e6
+                  "metro_small", # pop < 250,000
+                  "urb_large_adj", # pop >= 20,000, metro adjacent 
+                  "urb_large_det", # pop >= 20,000, metro detached
+                  "urb_small_adj", # pop 2500-20,000, metro adjacent
+                  "urb_small_det", # pop 2500-20,000, metro detached
+                  "rural_adj", # pop < 2500, metro adjacent
+                  "rural_det"), # pop < 2500, metro detached
+  stringsAsFactors = F)
+
+## economic dependencies
+econdep_des <- data.frame(
+  econdep = as.character(c(1:6)),
+  econdep_des = c("farming", # dependent on farming
+                  "mining", # dependent on mining
+                  "manufacuring", # dependent on manufactoring
+                  "government", # dependent on federal and/or state govt
+                  "services", # dependent on services
+                  "nonspecialized"), # nonspecialized
+  stringsAsFactors = F)
+
+cnty_typology %<>% 
+  left_join(rur2urb_des, by="rur2urb") %>%
+  left_join(econdep_des, by="econdep") %>%
+  select(cnty_fips, rur2urb=rur2urb_des, econdep=econdep_des,retire)
+```
+
+## Climate regions
+
+NOAA list [9 climate regions](https://www.ncdc.noaa.gov/monitoring-references/maps/us-climate-regions.php) by state which might also serve as an interesting grouping variable. I was unable to find the actual data online so made a csv using the map linked above.
+
+```{r}
+## climate regions
+climate_region <- read.csv("data/climate_regions.csv", header=T, stringsAsFactors = F) %>%
+  rename(state.abb=state)
+```
+
+\newpage
+
+# Explanatory Variables
+
+## Temperature and precipitation
+
+There are plenty of ways to aggregate gridded temp and precip data into counties. However, using the USGS `geoknife` [R package](https://cran.r-project.org/web/packages/geoknife/vignettes/geoknife.html) allows for a very reproducible approach. `geoknife` primarily works through remote servers so much of the work is not done on the actual machine.
+
+### Create web data and clip to counties
+
+```{r, eval=F}
+summarize = dplyr::summarise
+query = geoknife::query
+
+# query available variables in prism dataset
+prism = webdata(url='http://cida.usgs.gov/thredds/dodsC/prism')
+query(prism,'variables')
+
+# load data
+precip <- webdata(list(
+  times = as.POSIXct(c('1970-01-01','2010-12-01')),
+  url = 'http://cida.usgs.gov/thredds/dodsC/prism',
+  variables = 'ppt'))
+
+tmax <- webdata(list(
+  times = as.POSIXct(c('1970-01-01','2010-12-01')),
+  url = 'http://cida.usgs.gov/thredds/dodsC/prism',
+  variables = 'tmx'))
+
+tmin <- webdata(list(
+  times = as.POSIXct(c('1970-01-01','2010-12-01')),
+  url = 'http://cida.usgs.gov/thredds/dodsC/prism',
+  variables = 'tmn'))
+
+# provide FIPS for every county
+library(maps) #load fips from maps package
+cnty.fips <- stringr::str_pad(as.character(maps::county.fips$fips), pad = '0', width = 5)
+
+# create stencil
+all.cnty <- webgeom(geom='sample:Counties', attribute='FIPS', values=cnty.fips)
+
+# download data
+precip.job <- geoknife(stencil=all.cnty, fabric=precip, wait = F, email = 'scworland@usgs.gov')
+tmax.job <- geoknife(stencil=all.cnty, fabric=tmax, wait = F, email = 'scworland@usgs.gov')
+tmin.job <- geoknife(stencil=all.cnty, fabric=tmin, wait = F, email = 'scworland@usgs.gov')
+
+# build seasons data frame
+seasons <- data.frame(month=c("Mar","Apr","May",
+                              "Jun","Jul","Aug",
+                              "Sep","Oct","Nov",
+                              "Dec","Jan","Feb"),
+                      season=c(rep("spring",3),
+                               rep("summer",3),
+                               rep("fall",3),
+                               rep("winter",3)),
+                      stringsAsFactors = F)
+
+```
+
+### extract precip data and calculate statistics
+
+```{r,eval=F}
+# extract precip data
+cnty.precip <- result(precip.job) 
+
+# mean summer precip 1970-2010
+mean.precip <- cnty.precip %>%
+  mutate(year=format(DateTime,'%Y'),
+         month = months(DateTime, abbreviate=T)) %>% 
+  select(-DateTime,-year,-statistic,-variable) %>%
+  melt(., id.vars="month") %>%
+  set_colnames(c("month","cnty_fips","ppt")) %>%
+  mutate(cnty_fips = as.character(cnty_fips),
+         ppt = as.numeric(ppt)) %>%
+  left_join(seasons, by="month") %>%
+  group_by(season,cnty_fips) %>%
+  summarize(summer_mean40yr = mean(ppt, na.rm=T)) %>%
+  filter(season=="summer") %>%
+  ungroup()
+
+# mean summer precip 2005-2010 minus 40 yr mean
+precip05_10 <- cnty.precip %>%
+  mutate(year=format(DateTime,'%Y'),
+         month = months(DateTime, abbreviate=T)) %>% 
+  select(-DateTime,-statistic,-variable) %>%
+  melt(., id.vars=c("year","month")) %>%
+  set_colnames(c("year","month","cnty_fips","ppt")) %>%
+  mutate(cnty_fips = as.character(cnty_fips),
+         ppt = as.numeric(ppt)) %>%
+  filter(year %in% c(as.character(2005:2010))) %>%
+  left_join(seasons, by="month") %>%
+  group_by(season,cnty_fips) %>%
+  summarize(summer_mean05_10 = mean(ppt, na.rm=T)) %>%
+  filter(season=="summer") %>%
+  ungroup() %>%
+  select(-season) %>%
+  left_join(mean.precip, by="cnty_fips") %>%
+  mutate(ppt_diff=summer_mean05_10-summer_mean40yr) %>%
+  ungroup()
+```
+
+```{r, echo=F}
+## mean summer precip 1970-2010
+precip05_10 <- read_feather("data/precip_diff_40yr.feather") %>%
+  select(cnty_fips,ppt_0510=summer_mean05_10,
+         ppt_40=summer_mean40yr,ppt_diff)
+
+mean.precip.map <- precip05_10 %>%
+  select(region=cnty_fips, value=ppt_diff) %>%
+  mutate(region=as.integer(region),
+         value=as.numeric(value))
+  
+county_choropleth(mean.precip.map , num_colors = 8, 
+                  title="2005-2010 summer precip - 40 yr summer precip") +
+  scale_fill_brewer(name="ppt diff", palette='YlGnBu', drop=FALSE)
+```
+
+### extract max temp data and calculate statistics
+
+```{r, eval=F}
+# extract temp data
+cnty.temp <- result(tmax.job) 
+
+# mean max summer temp 1970-2010
+mean.tmax <- cnty.temp %>%
+  mutate(year=format(DateTime,'%Y'),
+         month = months(DateTime, abbreviate=T)) %>% 
+  select(-DateTime,-year,-statistic,-variable) %>%
+  melt(., id.vars="month") %>%
+  set_colnames(c("month","cnty_fips","mxtmp")) %>%
+  mutate(cnty_fips = as.character(cnty_fips),
+         mxtmp = as.numeric(mxtmp)) %>%
+  left_join(seasons, by="month") %>%
+  group_by(season,cnty_fips) %>%
+  summarize(summer_mean40yr = mean(mxtmp, na.rm=T)) %>%
+  filter(season=="summer") %>%
+  ungroup()
+
+# mean max summer temp 2005-2010 minus 40 yr mean
+tmax05_10 <- cnty.temp %>%
+  mutate(year=format(DateTime,'%Y'),
+         month = months(DateTime, abbreviate=T)) %>% 
+  select(-DateTime,-statistic,-variable) %>%
+  melt(., id.vars=c("year","month")) %>%
+  set_colnames(c("year","month","cnty_fips","mxtmp")) %>%
+  mutate(cnty_fips = as.character(cnty_fips),
+         mxtmp = as.numeric(mxtmp)) %>%
+  filter(year %in% c(as.character(2005:2010))) %>%
+  left_join(seasons, by="month") %>%
+  group_by(season,cnty_fips) %>%
+  summarize(summer_mean05_10 = mean(mxtmp, na.rm=T)) %>%
+  filter(season=="summer") %>%
+  ungroup() %>%
+  select(-season) %>%
+  left_join(mean.tmax, by="cnty_fips") %>%
+  mutate(tmax_diff=summer_mean05_10-summer_mean40yr) %>%
+  ungroup()
+```
+
+```{r, echo=F}
+## mean summer temp 1970-2010
+tmax05_10 <- read_feather("data/tmax_diff_40yr.feather") %>%
+  select(cnty_fips,tmax_0510=summer_mean05_10,
+         tmax_40=summer_mean40yr,tmax_diff)
+
+mean.tmax.map <- tmax05_10 %>%
+  select(region=cnty_fips, value=tmax_diff) %>%
+  mutate(region=as.integer(region),
+         value=as.numeric(value))
+
+county_choropleth(mean.tmax.map, num_colors = 8, 
+                  title="2005-2010 summer max temp - 40 yr summer max temp") +
+  scale_fill_brewer(name="tmax diff", palette='YlOrRd', drop=FALSE)
+```
+
+## Water Yield
+
+Thomas Brown from Colorado State sent me the water yield data from [this](http://www.fs.fed.us/rmrs/documents-and-media/really-mean-annual-renewable-water-supply-contiguous-united-states) recent study.
+
+
+"Daily water yield was estimated using the Variable Infiltration Capacity (VIC) model at each 1/8º by 1/8º (about 12 km by 12 km) grid cell across the conterminous U.S. Yields were aggregated over time to estimate mean annual yield. Having the spatially distributed estimates of mean annual water yield at its source, land boundaries were then overlaid. Aggregating estimates of yield across cells within a boundary indicates the amount of water supply originating within the designated area."
+
+```{r}
+## water yield
+wyield <- read.csv("data/VIC_Q_by_CountyFIPS.csv", header=T, 
+                   colClasses = c("character","numeric","numeric")) %>%
+  mutate(cnty_fips=str_pad(cnty_fips, pad = '0', width = 5))
+```
+
+```{r, echo=F}
+wyeild.map <- wyield %>%
+  select(region=cnty_fips, value=Qmm) %>%
+  mutate(region=as.integer(region),
+         value=as.numeric(value))
+
+county_choropleth(wyeild.map, num_colors = 8, title="Water yield 1981-2010") +
+  scale_fill_brewer(name="Q mm", palette='RdYlBu', drop=FALSE)
+```
+
+## Cooks Partisan Voting Index
+
+### Acquiring county level presidential data
+
+To calculate county level PVI, we need to aggregate county level presidential election results for the years of interest. The steps to create the data file `presidential_votes_2004_2008.csv` is included below. Note, it requires the use of a subscription to CQ press.I used Vanderbilt Universities.
+
+1. Go to http://library.cqpress.com.proxy.library.vanderbilt.edu/elections/download-data.php
+2. Go to the main page >> Dowload data >> president >> county detail >> select state and year
+3. The state, county, race date, total number of votes, percent democratic, and percent republican are extracted from each downloaded file and combined into the `presidential_votes_2004_2008.csv` file. Unfortunately, the county FIPS codes are not included with the CQpress downloads and must be added using the county name and state.
+
+Below is the first 10 rows of the `presidential_votes_2004_2008.csv` file:
+
+```{r, echo=F}
+pres_data <- read.csv("data/presidential_votes_2004_2008.csv", stringsAsFactors=F)
+```
+
+```{r, echo=F, results='asis'}
+pres_data.tab <- xtable(pres_data,digits=c(0,0,0,0,0,2,2))
+align(pres_data.tab) <- rep("l",7)
+print(pres_data.tab[1:10,],include.rownames=F,comment = F)
+```
+
+### Adding county FIPS codes
+
+We want to use the county and state name to add the county fips codes from `wudata`. A good bit of pre-processing is needed prior to trying to add FIPS codes to the `pres_data` file. Some of the county names may have spaces, capital letters, or puncuation that is inconsistent and will cause an incorrect merger. There are also other possible differences (e.g., different spellings, abbreviations, or how a county is treated by the Census Bureau), which is addressed later.
+
+```{r}
+# prepare for merging with pres_data file
+cnty.fips <- wudata %>%
+  select(state,county,cnty_fips) %>%
+  mutate(state = str_to_lower(state) %>%
+           str_replace_all(fixed(" "), ""),
+         county = str_to_lower(county) %>%
+           str_replace_all("parish", "") %>%
+           str_replace_all("[[:punct:]]","") %>%
+           str_replace_all("[[:digit:]]","") %>%
+           str_replace_all(fixed(" "), "") %>%
+           ifelse(grepl("obrien",.), "obrien",.) %>%
+           ifelse(grepl("princegeorges",.), "princegeorges",.) %>%
+           ifelse(grepl("queenannes",.), "queenannes",.) %>%
+           ifelse(grepl("stmarys",.), "stmarys",.) %>%
+           ifelse(grepl("carsoncity",.),"carsoncity",.)%>%
+           ifelse(grepl("stlouiscity",.),"stlouiscity",.)) %>%
+  mutate(county = ifelse(state=="virginia",str_replace_all(county,"city", ""),county)) 
+
+# two missing counties for 2008 election
+# http://uselectionatlas.org
+pres_2008_miss <- data.frame(cnty_fips=c("29001","45001"),
+                             year=c(2008,2008),
+                             state=c("missouri","southcarolina"),
+                             total_votes=c(11871,11001),
+                             rep_prop=c(0.4963,0.5694),
+                             dem_prop=c(0.4831,0.4175),
+                             stringsAsFactors = F)
+
+# Load pres_data file, clean, and merge
+pres_data <- read.csv("data/presidential_votes_2004_2008.csv", stringsAsFactors=F) %>%
+  mutate(county = str_replace_all(county, "[[:punct:]]","") %>% # remove punctuation
+           str_replace_all(fixed(" "), "") %>% # remove white spaces
+           str_to_lower(),
+         state = str_to_lower(state) %>% # make state name lower case
+           str_replace_all(fixed(" "), "")) %>% 
+  mutate(county = ifelse(state=="virginia",str_replace_all(county,"city", ""),county)) %>%
+  filter(!county %in% c("kansascity","votesnotreportedbycounty")) %>% # remove flag
+  filter(!(state %in% c("alaska","hawaii"))) %>%
+  left_join(cnty.fips,by=c("county","state")) %>%
+  group_by(cnty_fips, year, state) %>%
+  dplyr::summarize(total_votes=sum(total_votes),
+            rep_prop = mean(rep_prop),
+            dem_prop = mean(dem_prop)) %>%
+  ungroup() %>%
+  bind_rows(pres_2008_miss) %>%
+  arrange(cnty_fips) %>%
+  as.data.frame()
+
+```
+
+### Calculate PVI and
+
+The index involves comparing the two-way presidential vote for two consecutive years. This means we only care about head-to-head results for just the republican votes and democratic votes. I used 2004 and 2008. The variables are straight forward:
+
+$DY1_n$ = Democratic share of the national two-way Presidential vote, year one (2004)
+
+$DY2_n$ = Democratic share of the national two-way Presidential vote, year two (2008)
+
+$DY1_c$ = Democratic share of the county two-way Presidential vote, year one (2004)
+
+$DY1_c$ = Democratic share of the county two-way Presidential vote, year one (2008)
+
+
+$$PVI = \left(\frac{DY1_d + DY2_d}{2} - \frac{DY1_n + DY2_n}{2}\right) * 100$$
+
+Where "democratic share" is the $dem_{votes}/(dem_{votes} + rep_{votes})$. This could just as easily be calculated as percent republican. For above, a positive number would mean more democratic than the national average, and a negative number would mean more republican.
+
+We are starting with two years of total votes and the proportion that are democratic or republican.
+
+```{r}
+# 2004 rep and dem head to head
+pres2004 <- pres_data %>%
+  filter(year==2004) %>%
+  #filter(!is.na(cnty_fips)) %>%
+  mutate(dem04 = dem_prop*total_votes, 
+         rep04 = rep_prop*total_votes, 
+         rep_dem04 = dem04 + rep04,
+         dem2004 = dem04/rep_dem04) %>%
+  select(cnty_fips,dem04,rep_dem04)
+
+# 2008 rep and dem head to head
+pres2008 <- pres_data %>%
+  filter(year==2008) %>%
+  #filter(!is.na(cnty_fips)) %>%
+  mutate(dem08 = dem_prop*total_votes, 
+         rep08 = rep_prop*total_votes, 
+         rep_dem08 = dem08 + rep08,
+         dem2008 = dem08/rep_dem08) %>%
+  select(cnty_fips,dem08,rep_dem08)
+
+
+# calculate national share
+dn04 <- sum(pres2004$dem04)/sum(pres2004$rep_dem04)
+dn08 <- sum(pres2008$dem08)/sum(pres2008$rep_dem08)
+mn_nat_dem = (dn08 + dn04)/2
+
+# calculate pvi for counties
+cnty_pvi <- pres2004 %>%
+  left_join(pres2008, by="cnty_fips") %>%
+  mutate(pdem08 = dem08/rep_dem08,
+         pdem04 = dem04/rep_dem04,
+         mn_dem = (pdem08 + pdem04)/2,
+         cnty.pvi = (mn_dem - mn_nat_dem)*100)
+
+write.csv(cnty_pvi, file="cnty_pvi.csv", row.names=F)
+```
+
+```{r, echo=F}
+pvi.map <- cnty_pvi %>%
+  select(cnty_fips,cnty.pvi) %>%
+  set_colnames(c("region","value")) %>%
+  mutate(region=as.integer(region)) 
+
+county_choropleth(pvi.map, num_colors = 1, title="County level PVI for 2008 and 2004") +
+  scale_fill_gradient2(low = "red",
+                       mid = "white",
+                       high = "blue",
+                       midpoint = 0,
+                       na.value = "black",
+                       breaks = pretty(pvi.map$value, n = 10))
+```
+
+```{r, echo=F}
+## cooks partisan voting index
+cnty_pvi <- read.csv("data/cnty_pvi.csv", stringsAsFactors = F) %>%
+  select(cnty_fips,cnty.pvi) %>%
+  mutate(cnty_fips = as.character(cnty_fips) %>%
+           str_pad(5, pad = "0"))
+```
+
+## land area
+
+```{r, eval=F}
+# url for area data
+area.url <- "http://www2.census.gov/prod2/statcomp/usac/excel/LND01.xls"
+
+# download area data file
+download.file(area.url, "data/cnty_area.xls")
+
+# county land area in sq miles
+cnty.area <- read_excel("data/cnty_area.xls") %>%
+  select(cnty_fips=STCOU,cnty_area=LND110200D)
+```
+
+```{r, echo=F}
+## county land area in sq miles
+cnty.area <- read_excel("data/cnty_area.xls") %>%
+  select(cnty_fips=STCOU,cnty_area=LND110200D)
+```
+
+## Census demographic data
+
+This section uses the `acs` package and table numbers from the american community survey. Description can be found [here](https://www.socialexplorer.com/data/ACS2011_5yr/metadata/?ds=ACS11_5yr).
+
+```{r, echo=F}
+library(acs)
+api.key.install(key="3143f097ff908575e23f4d7c054d7dc8612a14a6")
+```
+
+```{r}
+# make geo object of counties
+cnty.geo <- geo.make(state="*", county="*")
+
+# lookup function 
+#acs.lookup(keyword = "median income", endyear = 2010, span=5, case.sensitive=F)
+
+# population growth 2000 to 2010
+pop2000 <- acs.fetch(endyear=2000, geography = cnty.geo, dataset="sf1", variable="P001001")
+pop2010 <- acs.fetch(endyear=2010, geography = cnty.geo, dataset="sf1", variable="P0010001")
+
+cnty.pop2000 <- data.frame(geography(pop2000), estimate(pop2000)) %>%
+  mutate(cnty_fips = str_pad(paste0(state,county),5,pad="0")) %>%
+  select(cnty_fips, pop2000=P001001)
+
+cnty.pop2010 <- data.frame(geography(pop2010), estimate(pop2010)) %>%
+  mutate(cnty_fips = str_pad(paste0(state,county),5,pad="0")) %>%
+  select(cnty_fips, pop2010=P0010001)
+
+popgrowth <- left_join(cnty.pop2000,cnty.pop2010, by="cnty_fips") %>%
+  mutate(pgrowth = round((pop2010-pop2000)/pop2000,3)) %>%
+  select(cnty_fips, pgrowth)
+
+# acs variable names and codes
+acs.vars <- data.frame(var.names=c("cnty_pop","num_houses","med_income","gini",
+                                   "poverty","renter","plumbing","medyr_structure",
+                                   "med_age","college","sfh_d","sfh_a","mob_home",
+                                   "apt10","apt20","apt50","med_value"),
+                       var.codes=c("B01003_001","B25001_001","B06011_001","B19083_001",
+                                   "B17001_002","B25003_003","B25047_002","B25035_001",
+                                   "B01002_001","B06009_004","B25024_002","B25024_003",
+                                   "B25024_010","B25024_007","B25024_008","B25024_009",
+                                   "B25077_001"),
+                       stringsAsFactors = F)
+
+# fetch acs data for counties
+acs.data.raw <- acs.fetch(endyear=2010, span=5, cnty.geo, variable=acs.vars$var.codes,
+                          col.names=acs.vars$var.names)
+
+# Build data.frame of census data
+acs.data <- data.frame(geography(acs.data.raw), estimate(acs.data.raw)) %>%
+  mutate(cnty_fips = str_pad(paste0(state,county),5,pad="0")) %>%
+  left_join(cnty.area, by="cnty_fips") %>%
+  left_join(popgrowth, by="cnty_fips") %>%
+  na.omit() %>%
+  mutate(ppl_house=cnty_pop/num_houses,
+         house_dens=num_houses/cnty_area,
+         prent=renter/num_houses,
+         med_age_struc=2010-medyr_structure,
+         pcollege=college/cnty_pop,
+         ppoverty=poverty/cnty_pop,
+         psfh=(sfh_a + sfh_d)/num_houses,
+         pmob_home=mob_home/num_houses,
+         papt=(apt10+apt20+apt50)/num_houses) %>%
+  select(cnty_fips,cnty_pop:papt) %>%
+  set_rownames(NULL)
+```
+
+# Merge data sets
+
+Create a list of the data sets and then merge everything by county FIPS codes. Also calculate houshold water use in this step:
+
+```{r}
+data.list <- list(wudata,
+                  cnty_typology,
+                  wyield,
+                  tmax05_10,
+                  precip05_10,
+                  cnty_pvi,
+                  acs.data)
+
+data.full <- Reduce(function(x,y) 
+  left_join(x,y,by="cnty_fips"), data.list) %>%
+  left_join(climate_region, by="state.abb") %>%
+  mutate(house_served = (pop_served/cnty_pop.x) * num_houses,
+         wh = ((wthdrw_tw*1e6*365))/house_served) 
+```
+
+## Water trading
+
+Counties trade water with other counties. If a county is selling water, then that county will have exceptionally high household water use, and if a county is buying water, the opposite it will be true. Unfortunately, there is not yet a database that captures water trading information and our regression model cannot account for it's effects (model coefficients would be driven by the extremes due to water trading). In order to account for this, we used data from [Rockaway 2011](https://www.researchgate.net/publication/279937580_Residential_Water_Use_Trends_in_North_America) (which draws on data from an earlier [EPA report](http://www.waterrf.org/PublicReportLibrary/4031.pdf)) to constrain our data set to counties that fall within a reasonable range of values that were taken from the above linked paper. The contraints are based off the AWWA water survey, and provides thresholds from a source that is independent of the USGS data. We dropped counties that with annual household water use values less than 50,000 gal/yr and greater than 300,000 gal/yr. 
+
+```{r, echo=F, fig.height=4}
+ggplot(data.full, aes(wh)) + 
+  geom_histogram(bins="100",color="white") + theme_bw() +
+  scale_x_log10(breaks=c(1e4,1e5,1e6), labels=c("10,000","100,000","1,000,000")) + 
+  geom_vline(xintercept=102985, linetype="dashed",color="red", size=1) +
+  geom_vline(xintercept=5e4, linetype="dashed",color="blue", size=1) +
+  geom_vline(xintercept=3e5, linetype="dashed",color="blue", size=1) +
+  labs(x="withdrawal/households (gal/house/year)") +
+  coord_cartesian(xlim=c(1e3,1e7)) +
+  ggtitle("Thresholds derived from Rockaway et al., 2011 paper") +
+  labs(subtitle="red line = mean from table 3 in paper, blue lines = 50,000 and 300,000 gal/year")
+```
+
+
+Select only the variables on interest, drop counties outside of thresholds detailed above, and scale the covariates (i.e., convert to z-scores).
+
+```{r}
+model.data <- data.full %>%
+  select(cnty_fips,county,state,state.abb,climate_region, 
+         rur2urb,econdep,retire,wh,cnty_pop=cnty_pop.y,
+         pgrowth,prop_sw,Qmm,tmax_40,tmax_0510,tmax_diff,
+         ppt_40,ppt_0510,ppt_diff,med_income,ppoverty,
+         gini,med_age,pcollege,cnty.pvi,house_dens,
+         ppl_house,med_value,med_age_struc,prent,
+         psfh,pmob_home,papt) %>%
+  na.omit() %>%
+  filter(wh > 5e4 & wh < 3e5) %>%
+  mutate_each(funs(as.numeric(scale(.))), -(cnty_fips:wh))
+```
+
+We dropped 563 counties which leaves us with 2546 for the analysis. Below is a map of the remaining counties:
+
+```{r, echo=F}
+wh.map <- model.data %>%
+  select(region=cnty_fips,value=wh) %>%
+  mutate(region=as.integer(region))
+
+county_choropleth(wh.map, num_colors = 8, title="Houshold withdrawals gal/yr") 
+```
+
+See which covariates have a correlation greater than 0.4. This is a completely arbitrary cutoff:
+
+```{r}
+high.cor <- model.data %>%
+  select(wh:papt) %>%
+  correlate() %>%
+  shave() %>%
+  stretch() %>%
+  na.omit() %>%
+  filter(abs(r)>0.4)
+```
+
+\newpage
+
+```{r, echo=F, results='asis'}
+cor.tab <- xtable(high.cor,digits=c(0,0,0,3))
+align(cor.tab) <- c("l","l","l","c")
+print(cor.tab,include.rownames=F,comment = F)
+```
+
+Finally, remove several variables that are highly correlated with other variables:
+
+```{r}
+model.data <- model.data %>%
+  select(-c(tmax_0510,ppt_0510,ppoverty,
+            med_value,pmob_home))
+```
+
+
+

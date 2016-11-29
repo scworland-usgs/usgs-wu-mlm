@@ -1,0 +1,174 @@
+---
+title: "Withdrawal vs Delivery"
+author: "Scott C. Worland"
+date: "November 1, 2016"
+output: pdf_document
+---
+
+```{r, echo=F}
+knitr::opts_chunk$set(fig.width=7,fig.height=4,fig.align = 'center', warning=F, message=F,cache=F)
+knitr::opts_knit$set(root.dir = '~/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm/Fall_2016')
+
+library(pacman)
+pacman::p_load(ggplot2,dplyr,reshape2,xtable,magrittr,stringr,readxl,maps,choroplethr,ggmap)
+
+#setwd("~/Water Conservation/R_conservation/USGSwaterUse/usgs-wu-mlm/Fall_2016")
+```
+
+# Normalized freshwater withdrawals
+
+We can calculate normalize freshwater withdrawals ($wn$) for public supply for each county $i$ by the following equation,
+
+$$
+wn = \frac{withdrawal_i}{county~pop_i}.
+$$
+
+We can also switch out the numerator with public supply deliveries and calculate normalized deliveries $dn$,
+
+$$
+dn = \frac{deliveries_i}{county~pop_i}.
+$$
+
+Adding them is also an option,
+
+$$
+dwn = \frac{deliveries_i + withdrawal_i}{county~pop_i}.
+$$
+
+Several of the counties show zero withdrawals (e.g., DC), but substantial deliveries. This makes me think that deliveries captures more information about water use in a particular county than withdrawals. If a county purchases water from a neighboring county, they will show zero withdrawals but they still deliver that water to customers so will record a value for deliveries. Although, if a county withdrawals water and sells half of it to a neighbor, that might still be recorded as a delivery so they may have a very high withdrawal and delivery value relative to their population. First, here are histograms for both $wn$ and $dn$,
+
+
+
+```{r, echo=F, fig.width=7,fig.height=4}
+wudata <- read.delim("http://water.usgs.gov/watuse/data/2010/usco2010.txt") %>%
+  setNames(str_to_lower(names(.))) %>%
+  filter(!state %in% c("AK","HI","PR","VI")) %>%
+  select(cnty_fips=fips, state, county, year, cnty_pop=tp.totpop,
+         wthdrw_gw=ps.wgwfr, wthdrw_sw=ps.wswfr, wthdrw_tw=ps.wfrto,
+         dom_del=do.psdel) %>%
+   mutate(cnty_fips = str_pad(cnty_fips,5, pad = "0"),# add leading zero
+         county = str_replace_all(county, fixed(" County"), ""), # remove word "County"
+         cnty_pop = cnty_pop*1000, # convert population to raw pop
+         wn = (wthdrw_tw/cnty_pop)*1e6, # calculate normalized withdrawals (g/p/d)
+         dn = (dom_del/cnty_pop)*1e6) %>%
+    group_by(state) %>%
+  dplyr::mutate(st_pop=sum(cnty_pop),
+         st_w=sum(wthdrw_tw),
+         st_d=sum(dom_del),
+         st_wn=(st_w/st_pop)*1e6,
+         st_dn=(st_d/st_pop)*1e6) %>%
+  ungroup() %>%
+  mutate(wn_nostate=wn-st_wn,
+         dn_nostate=dn-st_dn) %>%
+  select(cnty_fips,state,county,wn,dn,wn_nostate,dn_nostate)
+
+
+hist.plot  <- wudata %>%
+  select(dom_deln=dn,wn) %>%
+  melt() %>%
+  ggplot(aes(value, fill=variable)) + 
+  geom_histogram(bins = 80, color="white", alpha=0.8) +
+  theme_bw() +
+  geom_vline(xintercept=100, linetype="dashed") +
+  coord_cartesian(xlim=c(1,1000)) +
+  scale_x_log10(breaks=c(10,100,1000)) +
+  xlab("gal/p/day")
+
+hist.plot
+```
+
+Let's see how these map,
+
+```{r, echo=F}
+wn.map <- wudata %>%
+  select(region=cnty_fips,value=wn) %>%
+  mutate(region=as.integer(region),
+         value=round(value,0))
+
+dn.map <- wudata %>%
+  select(region=cnty_fips,value=dn) %>%
+  mutate(region=as.integer(region),
+         value=round(value,0))
+
+county_choropleth(wn.map, num_colors = 8, title="County map of wn")
+county_choropleth(dn.map, num_colors = 8, title="County map of domestic deliv/pop")
+```
+
+At first glance they seem pretty similar, but they are different is some important ways (highlighted by the map of deliverys divided by withdrawals). First, notice the maximum value for $wn$ is over 10,000 g/p/d. Some of the counties with really high values can be explained by water exports (e.g., counties in Delaware river basing to NYC), but some are a mystery. The map of $dn$ reveals some strange things as well. Notice the stark differences between states. Do we really think that per capita water use is so sharply divided by state lines? Some of this pattern must be due to reporting practices for each state. We can remove the state effects by subtracting the state level $wn$ and $dn$ value from each county within that state,
+
+```{r, echo=F}
+
+wudata.state <- read.csv("data/wudata_out_NWIS2016-10-26.csv", 
+                   stringsAsFactors = F, na.strings = "-") %>%
+  filter(year==2010 & !state_name %in% c("Alaska","Hawaii")) %>% 
+  select(state=state_name,
+         cnty_pop=Total.Population.total.population.of.area..in.thousands,
+         wthdrw_tw=Public.Supply.total.self.supplied.withdrawals..fresh..in.Mgal.d,
+         deliv.dom=Public.Supply.deliveries.to.domestic..in.Mgal.d,
+         deliv.com=Public.Supply.deliveries.to.commercial..in.Mgal.d,
+         deliv.ind=Public.Supply.deliveries.to.industrial..in.Mgal.d) %>%
+  mutate(deliv=rowSums(cbind(deliv.dom,deliv.com,deliv.ind),na.rm=T),
+         cnty_pop = cnty_pop*1000) %>%
+  group_by(state) %>%
+  dplyr::summarize(pop=sum(cnty_pop),
+                   w=sum(wthdrw_tw),
+                   d=sum(deliv),
+                   wn=(w/pop)*1e6,
+                   dn=(d/pop)*1e6)
+
+
+wn.state <- wudata.state %>%
+  select(region=state,value=wn) %>%
+  mutate(region=str_to_lower(region),
+         value=round(value,0)) %>%
+  mutate(region=ifelse(region=="dist. of columbia","district of columbia",region))
+
+dn.state <- wudata.state %>%
+  select(region=state,value=dn) %>%
+  mutate(region=str_to_lower(region),
+         value=round(value,0)) %>%
+  mutate(region=ifelse(region=="dist. of columbia","district of columbia",region))
+  
+
+state_choropleth(wn.state,num_colors = 8, title="State map of wn")
+state_choropleth(dn.state,num_colors = 8, title="State map of dn")
+```
+
+```{r, echo=F}
+wn.nostate.map <- wudata %>%
+  select(region=cnty_fips,value=wn_nostate) %>%
+  mutate(region=as.integer(region),
+         value=round(value,0))
+
+dn.nostate.map <- wudata %>%
+  select(region=cnty_fips,value=dn_nostate) %>%
+  mutate(region=as.integer(region),
+         value=round(value,0))
+
+county_choropleth(wn.map, num_colors = 8, title="County map of wn")
+county_choropleth(wn.nostate.map, num_colors = 8, title="County map of wn - state effects")
+
+```
+
+
+```{r, echo=F}
+county_choropleth(dn.map, num_colors = 8, title="County map of domestic deliv/pop")
+county_choropleth(dn.nostate.map, num_colors = 8, title="County map of domestic deliv/pop - state effects")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
